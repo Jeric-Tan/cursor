@@ -39,12 +39,12 @@ export const api = {
     return await response.json();
   },
 
-  async sendMessage(sessionId, message) {
-    // TODO: POST to /api/chat
+  async sendMessage(sessionId, message, useRAG = true) {
+    // POST to /api/chat with RAG support
     const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.CHAT}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId, message })
+      body: JSON.stringify({ sessionId, message, useRAG })
     });
 
     if (!response.ok) {
