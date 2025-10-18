@@ -5,6 +5,47 @@ import { cloneVoice, textToSpeech } from './elevenlabs.js';
 import { generateResponse } from './llm.js';
 import { createPersonalityPrompt } from './prompt-generator.js';
 import { simulateSmitheryWebhook } from './mock-data.js';
+import { ConsciousnessScraper, validateConfig } from './scraper/index.js';
+import { saveScrapedSnapshot } from './storage/scraped-store.js';
+
+const ENABLE_MCP_SCRAPER = process.env.ENABLE_MCP_SCRAPER !== 'false';
+let hasLoggedScraperConfig = false;
+
+async function applyScrapedData(sessionId, scrapedData, label = 'Smithery', context = {}) {
+  const masterPrompt = await createPersonalityPrompt(scrapedData);
+  const payload = {
+    sessionId,
+    label,
+    storedAt: new Date().toISOString(),
+    masterPrompt,
+    scrapedData,
+    ...context
+  };
+
+  try {
+    await updateProfile(sessionId, {
+      scraped_data_json: scrapedData,
+      master_prompt: masterPrompt,
+      is_ego_ready: true
+    });
+  } catch (error) {
+    console.warn(`[${label}] Skipping Supabase profile update: ${error}`);
+  }
+
+  const filePath = await saveScrapedSnapshot(sessionId, payload);
+  console.log(`[${label}] Scraped data stored at ${filePath}`);
+}
+
+async function triggerScraper(sessionId, fullName) {
+  if (!hasLoggedScraperConfig) {
+    validateConfig();
+    hasLoggedScraperConfig = true;
+  }
+
+  const scraper = new ConsciousnessScraper();
+  const scrapedData = await scraper.scrape({ name: fullName, limit: 25 });
+  await applyScrapedData(sessionId, scrapedData, 'SCRAPER', { fullName });
+}
 
 // POST /api/start
 export async function handleStart(req, res) {
@@ -18,24 +59,23 @@ export async function handleStart(req, res) {
     // Create profile in database
     const profile = await createProfile(fullName);
 
-    // TODO: JERIC/JASPER - Trigger real Smithery agent when ready
-    // For demo mode, simulate webhook after 5 seconds
-    const USE_MOCK = !process.env.SMITHERY_API_KEY;
-    if (USE_MOCK) {
-      console.log('[MOCK] Simulating Smithery scraping...');
-      simulateSmitheryWebhook(profile.id, async (sessionId, scrapedData) => {
-        try {
-          const masterPrompt = await createPersonalityPrompt(scrapedData);
-          await updateProfile(sessionId, {
-            scraped_data_json: scrapedData,
-            master_prompt: masterPrompt,
-            is_ego_ready: true
-          });
-          console.log('[MOCK] Smithery webhook processed, Ego is ready!');
-        } catch (error) {
-          console.error('[MOCK] Error in simulated webhook:', error);
-        }
+    if (ENABLE_MCP_SCRAPER) {
+      console.log('[SCRAPER] Starting real MCP-based scrape...');
+      triggerScraper(profile.id, fullName).catch((error) => {
+        console.error('[SCRAPER] Error running scraper, falling back to mock:', error);
+        simulateSmitheryWebhook(profile.id, (sessionId, scrapedData) =>
+          applyScrapedData(sessionId, scrapedData, 'MOCK', { fullName }).catch((mockError) => {
+            console.error('[MOCK] Error applying simulated webhook:', mockError);
+          })
+        );
       });
+    } else {
+      console.log('[MOCK] Simulating Smithery scraping (scraper disabled)...');
+      simulateSmitheryWebhook(profile.id, (sessionId, scrapedData) =>
+        applyScrapedData(sessionId, scrapedData, 'MOCK', { fullName }).catch((mockError) => {
+          console.error('[MOCK] Error in simulated webhook:', mockError);
+        })
+      );
     }
 
     res.json({
@@ -146,15 +186,7 @@ export async function handleWebhook(req, res) {
       return res.status(400).json({ error: 'Invalid webhook data' });
     }
 
-    // Generate personality prompt from scraped data (Jeric/Jasper's code)
-    const masterPrompt = await createPersonalityPrompt(scrapedData);
-
-    // Update profile
-    await updateProfile(sessionId, {
-      scraped_data_json: scrapedData,
-      master_prompt: masterPrompt,
-      is_ego_ready: true
-    });
+    await applyScrapedData(sessionId, scrapedData, 'WEBHOOK');
 
     res.json({ received: true });
   } catch (error) {
