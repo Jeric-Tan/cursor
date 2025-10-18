@@ -5,6 +5,7 @@ import OpenAI from 'openai';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { spawn } from 'child_process';
 import dotenv from 'dotenv';
 
 // Load environment variables
@@ -12,6 +13,7 @@ dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
 
 const ELEVENLABS_API_KEY = process.env.ELEVENLABS_API_KEY;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
@@ -43,12 +45,14 @@ export async function cloneVoiceFromFiles(audioFiles, name) {
     formData.append('name', name);
     formData.append('description', `Voice cloned from ${audioFiles.length} audio samples`);
 
-    // Add all audio files
+    // Add all audio files - try WebM format (browser's native format)
     audioFiles.forEach((file, index) => {
+      const filename = file.filename || `audio-${index + 1}.webm`;
       formData.append('files', file.data, {
-        filename: file.filename || `audio-${index + 1}.webm`,
+        filename: filename,
         contentType: 'audio/webm'
       });
+      console.log(`📁 Added ${filename} (${file.data.length} bytes)`);
     });
 
     const response = await fetch(`${ELEVENLABS_API_URL}/voices/add`, {
@@ -61,8 +65,9 @@ export async function cloneVoiceFromFiles(audioFiles, name) {
     });
 
     if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`ElevenLabs API error: ${error}`);
+      const errorText = await response.text();
+      console.error(`ElevenLabs API Response: ${errorText}`);
+      throw new Error(`ElevenLabs API error (${response.status}): ${errorText}`);
     }
 
     const data = await response.json();
@@ -71,7 +76,8 @@ export async function cloneVoiceFromFiles(audioFiles, name) {
 
   } catch (error) {
     console.error('Error cloning voice:', error);
-    throw new Error('Failed to clone voice');
+    console.warn('⚠️  Voice cloning failed, continuing without cloned voice');
+    return null; // Return null instead of throwing error
   }
 }
 
@@ -94,6 +100,13 @@ export async function cloneVoice(audioUrl, name) {
  */
 export async function textToSpeech(text, voiceId) {
   if (USE_MOCK) return mockElevenLabs.textToSpeech(text, voiceId);
+
+  // If no voice ID, use default ElevenLabs voice
+  if (!voiceId) {
+    console.warn('⚠️  No cloned voice ID available, using default ElevenLabs voice');
+    // Use a default ElevenLabs voice ID (Adam voice)
+    voiceId = 'pNInz6obpgDQGcFmaJgB';
+  }
 
   try {
     const response = await fetch(`${ELEVENLABS_API_URL}/text-to-speech/${voiceId}`, {

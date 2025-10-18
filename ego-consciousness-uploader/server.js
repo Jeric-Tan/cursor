@@ -5,6 +5,7 @@ import fileUpload from 'express-fileupload';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 
 import {
@@ -13,18 +14,63 @@ import {
   handleUploadVoice,
   handleGetStatus,
   handleChat,
+  handleVoiceQuestion,
   handleWebhook
 } from './backend/api-endpoints.js';
 
 // Load environment variables
 dotenv.config();
 
-const app = express();
-const PORT = process.env.PORT || 3001;
-
 // Get __dirname for ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+const app = express();
+const PORT = process.env.PORT || 3001;
+
+// Clean up data folders on startup
+function cleanupDataFolders() {
+  const foldersToClean = [
+    path.join(__dirname, 'data', 'audio'),
+    path.join(__dirname, 'data', 'photos'),
+    path.join(__dirname, 'data', 'voices'),
+    path.join(__dirname, 'data', 'transcriptions'),
+    path.join(__dirname, 'data', 'generated-audio'),
+    path.join(__dirname, 'data', 'conversation'),
+    path.join(__dirname, 'data', 'scraped'),
+    path.join(__dirname, 'data', 'vector-stores')
+  ];
+
+  console.log('🧹 Cleaning up data folders...');
+  
+  foldersToClean.forEach(folderPath => {
+    try {
+      if (fs.existsSync(folderPath)) {
+        fs.rmSync(folderPath, { recursive: true, force: true });
+        console.log(`  ✓ Cleared: ${path.basename(folderPath)}/`);
+      }
+      fs.mkdirSync(folderPath, { recursive: true });
+    } catch (error) {
+      console.error(`  ✗ Error cleaning ${path.basename(folderPath)}:`, error.message);
+    }
+  });
+  
+  // Delete master vector store file
+  const vectorStoreFile = path.join(__dirname, 'data', 'vector-store.json');
+  try {
+    if (fs.existsSync(vectorStoreFile)) {
+      fs.unlinkSync(vectorStoreFile);
+      console.log('  ✓ Cleared: vector-store.json');
+    }
+  } catch (error) {
+    console.error('  ✗ Error cleaning vector-store.json:', error.message);
+  }
+  
+  console.log('✓ All data reset\n');
+}
+
+// Run cleanup on startup
+cleanupDataFolders();
 
 // Middleware
 app.use(cors());
@@ -55,6 +101,7 @@ app.post('/api/upload-pictures', handleUploadPictures);
 app.post('/api/upload-voice', handleUploadVoice);
 app.get('/api/status', handleGetStatus);
 app.post('/api/chat', handleChat);
+app.post('/api/voice-question', handleVoiceQuestion);
 app.post('/api/webhook', handleWebhook);
 
 // Serve index.html for all other routes (SPA) - but exclude API routes and static files

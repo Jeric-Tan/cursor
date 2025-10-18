@@ -40,7 +40,7 @@ export const mockSupabase = {
 
   async uploadAudio(sessionId, audioFile) {
     // Simulate file upload - return mock URL
-    const mockUrl = `https://mock-storage.example.com/voice-samples/${sessionId}-${Date.now()}.webm`;
+    const mockUrl = `https://mock-storage.example.com/voice-samples/${sessionId}-${Date.now()}.mp3`;
     return mockUrl;
   },
 
