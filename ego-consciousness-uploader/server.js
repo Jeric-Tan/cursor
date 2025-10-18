@@ -69,13 +69,17 @@ function cleanupDataFolders() {
   console.log('✓ All data reset\n');
 }
 
-// Run cleanup on startup
-cleanupDataFolders();
+// Run cleanup on startup (DISABLED - was deleting all data!)
+// cleanupDataFolders();
 
 // Middleware
 app.use(cors());
 app.use(express.json());
-app.use(fileUpload());
+app.use(fileUpload({
+  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit
+  useTempFiles: false,
+  tempFileDir: '/tmp/'
+}));
 
 // Serve frontend static files with proper MIME types
 app.use(express.static(path.join(__dirname, 'frontend'), {
@@ -91,6 +95,15 @@ app.use('/shared', express.static(path.join(__dirname, 'shared'), {
   setHeaders: (res, path) => {
     if (path.endsWith('.js')) {
       res.setHeader('Content-Type', 'application/javascript');
+    }
+  }
+}));
+
+// Serve generated audio files
+app.use('/generated-audio', express.static(path.join(__dirname, 'data', 'generated-audio'), {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.mp3')) {
+      res.setHeader('Content-Type', 'audio/mpeg');
     }
   }
 }));

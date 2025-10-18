@@ -529,8 +529,12 @@ function addMessageToChat(role, content, sources = null, audioUrl = null) {
     messageDiv.appendChild(playButton);
   }
 
-  // Auto-speak Ego responses when speech synthesis is available
-  if (role === 'ego' && speechSynth.supported) {
+  // Auto-play ElevenLabs audio if available, otherwise use browser speech synthesis
+  if (role === 'ego' && audioUrl) {
+    // Play the ElevenLabs cloned voice audio
+    playAudio(audioUrl);
+  } else if (role === 'ego' && speechSynth.supported) {
+    // Fallback to browser speech synthesis only if no audio URL
     speechSynth.speak(content);
   }
 

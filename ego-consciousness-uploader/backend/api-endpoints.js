@@ -386,6 +386,37 @@ export async function handleChat(req, res) {
     }
 
     // Generate audio using ElevenLabs (Jeric/Jasper's code)
+    console.log(`\n🔍 [CHAT TTS DEBUG]`);
+    console.log(`Session ID: ${sessionId}`);
+    console.log(`Profile Voice ID: ${profile.elevenlabs_voice_id || 'NULL/UNDEFINED'}`);
+    console.log(`Profile Object:`, JSON.stringify({
+      id: profile.id,
+      full_name: profile.full_name,
+      elevenlabs_voice_id: profile.elevenlabs_voice_id,
+      is_ego_ready: profile.is_ego_ready
+    }, null, 2));
+    
+    // If no voice ID, try to recover from voice file
+    if (!profile.elevenlabs_voice_id) {
+      console.warn(`⚠️  No voice ID in profile! Attempting to recover from voice file...`);
+      const voicesDir = path.join(__dirname, '..', 'data', 'voices');
+      const voiceInfoPath = path.join(voicesDir, `${sessionId}_voice.json`);
+      
+      if (fs.existsSync(voiceInfoPath)) {
+        const voiceInfo = JSON.parse(fs.readFileSync(voiceInfoPath, 'utf8'));
+        console.log(`✅ Found voice file! Using voice ID: ${voiceInfo.voice_id}`);
+        profile.elevenlabs_voice_id = voiceInfo.voice_id;
+        
+        // Update profile in database
+        await updateProfile(sessionId, { elevenlabs_voice_id: voiceInfo.voice_id });
+      } else {
+        console.error(`❌ No voice file found at: ${voiceInfoPath}`);
+      }
+    }
+    
+    console.log(`Final Voice ID for TTS: ${profile.elevenlabs_voice_id || 'WILL USE DEFAULT'}`);
+    console.log(`🔍 [END TTS DEBUG]\n`);
+    
     const audioUrl = await textToSpeech(
       textResponse,
       profile.elevenlabs_voice_id
