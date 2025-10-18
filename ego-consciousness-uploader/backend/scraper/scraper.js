@@ -1,6 +1,42 @@
 import { ExaMCPClient } from './mcp-client.js';
 import { ContentExtractor } from './extractor.js';
 
+const COMMON_ENGLISH_WORDS = [
+  'the',
+  'be',
+  'to',
+  'of',
+  'and',
+  'a',
+  'in',
+  'that',
+  'have',
+  'it',
+  'for',
+  'not',
+  'on',
+  'with',
+  'as',
+  'you',
+  'do',
+  'at',
+  'this',
+  'but',
+  'from',
+  'they',
+  'his',
+  'she',
+  'or',
+  'an',
+  'will',
+  'my',
+  'one',
+  'all',
+  'would',
+  'there',
+  'their',
+];
+
 /**
  * Main scraper class that orchestrates the data collection.
  */
@@ -35,7 +71,7 @@ export class ConsciousnessScraper {
 
     if (sources.length === 0) {
       console.log(`🌐 Searching for content about ${name}...`);
-      const searchResults = await this.mcpClient.webSearch(name, limit);
+      const searchResults = await this.mcpClient.webSearch(name, limit * 2);
       sourcesToScrape = Array.from(new Set(searchResults.map((r) => r.url)));
 
       if (shouldUsePrefetched) {
@@ -150,6 +186,10 @@ export class ConsciousnessScraper {
         continue;
       }
 
+      if (!this.isLikelyEnglish(contentItem.text)) {
+        continue;
+      }
+
       const signature = `${contentItem.text.slice(0, 120)}|${contentItem.topic}`;
       if (seen.has(signature)) {
         continue;
@@ -164,5 +204,50 @@ export class ConsciousnessScraper {
     }
 
     return items;
+  }
+
+  isLikelyEnglish(text) {
+    if (!text) {
+      return false;
+    }
+
+    const sample = text.slice(0, 1200);
+    const characters = Array.from(sample);
+    const asciiCount = characters.filter((ch) => ch.charCodeAt(0) < 128).length;
+    const asciiRatio = asciiCount / characters.length;
+    if (asciiRatio < 0.85) {
+      return false;
+    }
+
+    const alphaMatches = sample.match(/[A-Za-z]/g) || [];
+    if (alphaMatches.length < 40) {
+      return false;
+    }
+
+    const words = sample
+      .toLowerCase()
+      .split(/\s+/)
+      .map((w) => w.replace(/[^a-z']/g, ''))
+      .filter(Boolean);
+
+    if (words.length === 0) {
+      return false;
+    }
+
+    let commonCount = 0;
+    for (const word of words) {
+      if (COMMON_ENGLISH_WORDS.includes(word)) {
+        commonCount++;
+      }
+    }
+
+    const commonRatio = commonCount / words.length;
+    if (commonCount >= 3 || commonRatio >= 0.15) {
+      return true;
+    }
+
+    const englishWordCount = words.filter((word) => /^[a-z]+$/.test(word)).length;
+    const englishRatio = englishWordCount / words.length;
+    return englishRatio >= 0.6;
   }
 }
