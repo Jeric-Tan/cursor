@@ -138,6 +138,16 @@ h1 {
   animation: fadeUp 800ms ease-out both, egoIdle 10s ease-in-out infinite 1s;
   will-change: transform, text-shadow;
   transform-origin: center bottom;
+  transition: transform 160ms ease, text-shadow 200ms ease;
+}
+
+/* Hover lift for logo */
+h1:hover {
+  animation-play-state: paused; /* pause idle while interacting */
+  transform: translateY(-3px) scale(1.1);
+  text-shadow:
+    0 12px 40px rgba(31, 38, 135, 0.28),
+    0 4px 20px rgba(31, 38, 135, 0.16);
 }
 
 /* Responsive sizes to approximate sm:text-8xl and lg:text-9xl */
