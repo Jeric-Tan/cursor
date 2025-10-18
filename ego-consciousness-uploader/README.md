@@ -53,6 +53,14 @@ SUPABASE_SERVICE_KEY=your-service-key
 # Jeric/Jasper - Get from respective platforms
 ELEVENLABS_API_KEY=your-elevenlabs-key
 OPENAI_API_KEY=your-openai-key
+# Optional: Use Anthropic instead of OpenAI for scraping enrichment
+# ANTHROPIC_API_KEY=your-anthropic-key
+
+# Optional scraper tuning
+# OPENAI_SCRAPER_MODEL=gpt-4o-mini
+# ANTHROPIC_SCRAPER_MODEL=claude-3-5-sonnet-20241022
+# SCRAPER_ENRICH_MAX_CHARS=1600
+# ENABLE_SCRAPER_ENRICHMENT=true
 ```
 
 **Note:** You can add keys incrementally! Each service falls back to mock mode if its key is missing:
@@ -60,7 +68,26 @@ OPENAI_API_KEY=your-openai-key
 - No ElevenLabs key → Uses mock voice
 - No LLM keys → Uses smart mock responses
 
-#### 3. Setup Supabase (Optional for Production)
+#### 3. Configure Smithery / Exa Scraper (Optional but recommended)
+
+To enable the real MCP-powered scraper that pulls a person's public footprint:
+
+```bash
+# Optional overrides
+ENABLE_MCP_SCRAPER=true
+SMITHERY_SERVER_URL=https://server.smithery.ai/exa/mcp
+
+# Provide OAuth tokens from Smithery if you have them.
+OAUTH_ACCESS_TOKEN=your-smithery-access-token
+OAUTH_REFRESH_TOKEN=your-smithery-refresh-token
+```
+
+- Leave `ENABLE_MCP_SCRAPER` unset (or set to `true`) to run the real scraper.
+- Set `ENABLE_MCP_SCRAPER=false` to force demo mode if you just want the simulated Smithery webhook.
+- If no tokens are provided, the scraper automatically launches Smithery's OAuth flow in your browser the first time it runs and caches the tokens in `.smithery/`.
+- When OpenAI or Anthropic keys are present the scraper will enrich each snippet with persona metadata (beliefs, tone, domains, named people). Without keys the enrichment falls back to lightweight heuristics.
+
+#### 4. Setup Supabase (Optional for Production)
 
 1. Go to your Supabase Dashboard
 2. Open SQL Editor
@@ -69,7 +96,7 @@ OPENAI_API_KEY=your-openai-key
    - `voice-samples` (public)
    - `chat-audio` (public)
 
-#### 4. Run the App
+#### 5. Run the App
 
 ```bash
 npm run dev

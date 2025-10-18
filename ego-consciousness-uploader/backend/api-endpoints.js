@@ -1,10 +1,63 @@
 // JAKE/ZHENGFENG: API route handlers
 
-import { createProfile, getProfile, updateProfile, uploadAudio, saveMessage, getConversationHistory } from './supabase.js';
-import { cloneVoice, textToSpeech } from './elevenlabs.js';
-import { generateResponse } from './llm.js';
-import { createPersonalityPrompt } from './prompt-generator.js';
-import { simulateSmitheryWebhook } from './mock-data.js';
+import {
+  createProfile,
+  getProfile,
+  updateProfile,
+  uploadAudio,
+  saveMessage,
+  getConversationHistory,
+} from "./supabase.js";
+import { cloneVoice, textToSpeech } from "./elevenlabs.js";
+import { generateResponse } from "./llm.js";
+import { createPersonalityPrompt } from "./prompt-generator.js";
+import { simulateSmitheryWebhook } from "./mock-data.js";
+import { ConsciousnessScraper, validateConfig } from "./scraper/index.js";
+import { saveScrapedSnapshot } from "./storage/scraped-store.js";
+
+const ENABLE_MCP_SCRAPER = process.env.ENABLE_MCP_SCRAPER !== "false";
+let hasLoggedScraperConfig = false;
+
+async function applyScrapedData(
+  sessionId,
+  scrapedData,
+  label = "Smithery",
+  context = {}
+) {
+  const masterPrompt = await createPersonalityPrompt(scrapedData);
+  const payload = {
+    sessionId,
+    label,
+    storedAt: new Date().toISOString(),
+    masterPrompt,
+    scrapedData,
+    ...context,
+  };
+
+  try {
+    await updateProfile(sessionId, {
+      scraped_data_json: scrapedData,
+      master_prompt: masterPrompt,
+      is_ego_ready: true,
+    });
+  } catch (error) {
+    console.warn(`[${label}] Skipping Supabase profile update: ${error}`);
+  }
+
+  const filePath = await saveScrapedSnapshot(sessionId, payload);
+  console.log(`[${label}] Scraped data stored at ${filePath}`);
+}
+
+async function triggerScraper(sessionId, fullName) {
+  if (!hasLoggedScraperConfig) {
+    validateConfig();
+    hasLoggedScraperConfig = true;
+  }
+
+  const scraper = new ConsciousnessScraper();
+  const scrapedData = await scraper.scrape({ name: fullName, limit: 50 });
+  await applyScrapedData(sessionId, scrapedData, "SCRAPER", { fullName });
+}
 
 // POST /api/start
 export async function handleStart(req, res) {
@@ -12,39 +65,48 @@ export async function handleStart(req, res) {
     const { fullName } = req.body;
 
     if (!fullName || fullName.trim().length === 0) {
-      return res.status(400).json({ error: 'Name is required' });
+      return res.status(400).json({ error: "Name is required" });
     }
 
     // Create profile in database
     const profile = await createProfile(fullName);
 
-    // TODO: JERIC/JASPER - Trigger real Smithery agent when ready
-    // For demo mode, simulate webhook after 5 seconds
-    const USE_MOCK = !process.env.SMITHERY_API_KEY;
-    if (USE_MOCK) {
-      console.log('[MOCK] Simulating Smithery scraping...');
-      simulateSmitheryWebhook(profile.id, async (sessionId, scrapedData) => {
-        try {
-          const masterPrompt = await createPersonalityPrompt(scrapedData);
-          await updateProfile(sessionId, {
-            scraped_data_json: scrapedData,
-            master_prompt: masterPrompt,
-            is_ego_ready: true
-          });
-          console.log('[MOCK] Smithery webhook processed, Ego is ready!');
-        } catch (error) {
-          console.error('[MOCK] Error in simulated webhook:', error);
-        }
+    if (ENABLE_MCP_SCRAPER) {
+      console.log("[SCRAPER] Starting real MCP-based scrape...");
+      triggerScraper(profile.id, fullName).catch((error) => {
+        console.error(
+          "[SCRAPER] Error running scraper, falling back to mock:",
+          error
+        );
+        simulateSmitheryWebhook(profile.id, (sessionId, scrapedData) =>
+          applyScrapedData(sessionId, scrapedData, "MOCK", { fullName }).catch(
+            (mockError) => {
+              console.error(
+                "[MOCK] Error applying simulated webhook:",
+                mockError
+              );
+            }
+          )
+        );
       });
+    } else {
+      console.log("[MOCK] Simulating Smithery scraping (scraper disabled)...");
+      simulateSmitheryWebhook(profile.id, (sessionId, scrapedData) =>
+        applyScrapedData(sessionId, scrapedData, "MOCK", { fullName }).catch(
+          (mockError) => {
+            console.error("[MOCK] Error in simulated webhook:", mockError);
+          }
+        )
+      );
     }
 
     res.json({
       sessionId: profile.id,
-      status: 'initialized'
+      status: "initialized",
     });
   } catch (error) {
-    console.error('Error in handleStart:', error);
-    res.status(500).json({ error: 'Failed to start session' });
+    console.error("Error in handleStart:", error);
+    res.status(500).json({ error: "Failed to start session" });
   }
 }
 
@@ -55,7 +117,9 @@ export async function handleUploadVoice(req, res) {
     const audioFile = req.files?.audio;
 
     if (!sessionId || !audioFile) {
-      return res.status(400).json({ error: 'Session ID and audio file are required' });
+      return res
+        .status(400)
+        .json({ error: "Session ID and audio file are required" });
     }
 
     // Upload audio to Supabase Storage
@@ -67,16 +131,16 @@ export async function handleUploadVoice(req, res) {
     // Update profile with voice ID
     await updateProfile(sessionId, {
       voice_sample_url: audioUrl,
-      elevenlabs_voice_id: voiceId
+      elevenlabs_voice_id: voiceId,
     });
 
     res.json({
       success: true,
-      voiceId
+      voiceId,
     });
   } catch (error) {
-    console.error('Error in handleUploadVoice:', error);
-    res.status(500).json({ error: 'Failed to upload voice' });
+    console.error("Error in handleUploadVoice:", error);
+    res.status(500).json({ error: "Failed to upload voice" });
   }
 }
 
@@ -86,18 +150,18 @@ export async function handleGetStatus(req, res) {
     const { sessionId } = req.query;
 
     if (!sessionId) {
-      return res.status(400).json({ error: 'Session ID is required' });
+      return res.status(400).json({ error: "Session ID is required" });
     }
 
     const profile = await getProfile(sessionId);
 
     res.json({
       isEgoReady: profile.is_ego_ready,
-      status: profile.is_ego_ready ? 'ready' : 'processing'
+      status: profile.is_ego_ready ? "ready" : "processing",
     });
   } catch (error) {
-    console.error('Error in handleGetStatus:', error);
-    res.status(500).json({ error: 'Failed to get status' });
+    console.error("Error in handleGetStatus:", error);
+    res.status(500).json({ error: "Failed to get status" });
   }
 }
 
@@ -107,7 +171,9 @@ export async function handleChat(req, res) {
     const { sessionId, message } = req.body;
 
     if (!sessionId || !message) {
-      return res.status(400).json({ error: 'Session ID and message are required' });
+      return res
+        .status(400)
+        .json({ error: "Session ID and message are required" });
     }
 
     // Get profile and conversation history
@@ -115,25 +181,29 @@ export async function handleChat(req, res) {
     const history = await getConversationHistory(sessionId);
 
     // Save user message
-    await saveMessage(sessionId, 'user', message);
+    await saveMessage(sessionId, "user", message);
 
     // Generate response using LLM (Jeric/Jasper's code)
-    const systemPrompt = profile.master_prompt || 'You are a helpful AI assistant.';
+    const systemPrompt =
+      profile.master_prompt || "You are a helpful AI assistant.";
     const textResponse = await generateResponse(systemPrompt, history, message);
 
     // Generate audio using ElevenLabs (Jeric/Jasper's code)
-    const audioUrl = await textToSpeech(textResponse, profile.elevenlabs_voice_id);
+    const audioUrl = await textToSpeech(
+      textResponse,
+      profile.elevenlabs_voice_id
+    );
 
     // Save assistant message
-    await saveMessage(sessionId, 'assistant', textResponse, audioUrl);
+    await saveMessage(sessionId, "assistant", textResponse, audioUrl);
 
     res.json({
       textResponse,
-      audioUrl
+      audioUrl,
     });
   } catch (error) {
-    console.error('Error in handleChat:', error);
-    res.status(500).json({ error: 'Failed to process chat message' });
+    console.error("Error in handleChat:", error);
+    res.status(500).json({ error: "Failed to process chat message" });
   }
 }
 
@@ -143,22 +213,14 @@ export async function handleWebhook(req, res) {
     const { sessionId, scrapedData } = req.body;
 
     if (!sessionId || !scrapedData) {
-      return res.status(400).json({ error: 'Invalid webhook data' });
+      return res.status(400).json({ error: "Invalid webhook data" });
     }
 
-    // Generate personality prompt from scraped data (Jeric/Jasper's code)
-    const masterPrompt = await createPersonalityPrompt(scrapedData);
-
-    // Update profile
-    await updateProfile(sessionId, {
-      scraped_data_json: scrapedData,
-      master_prompt: masterPrompt,
-      is_ego_ready: true
-    });
+    await applyScrapedData(sessionId, scrapedData, "WEBHOOK");
 
     res.json({ received: true });
   } catch (error) {
-    console.error('Error in handleWebhook:', error);
-    res.status(500).json({ error: 'Failed to process webhook' });
+    console.error("Error in handleWebhook:", error);
+    res.status(500).json({ error: "Failed to process webhook" });
   }
 }

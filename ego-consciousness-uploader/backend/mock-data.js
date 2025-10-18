@@ -161,6 +161,59 @@ export function simulateSmitheryWebhook(sessionId, callback) {
   }, 5000);
 }
 
+export function mockEnrichContentItem(personName, item) {
+  const lowerTopic = (item.topic || '').toLowerCase();
+  const lowerText = (item.text || '').toLowerCase();
+
+  const belief = (() => {
+    if (lowerTopic.includes('ai') || lowerText.includes('ai')) {
+      return 'Commentary on the trajectory and impact of artificial intelligence.';
+    }
+    if (lowerTopic.includes('policy') || lowerText.includes('policy')) {
+      return 'Perspectives on policy and governance considerations.';
+    }
+    if (lowerTopic.includes('investment') || lowerText.includes('invest')) {
+      return 'Views on investment strategy and resource allocation.';
+    }
+    return `General reflection related to ${item.topic || 'the subject'}.`;
+  })();
+
+  const style = (() => {
+    if (lowerText.includes('we must') || lowerText.includes('we should')) {
+      return 'Directive and mission-driven, aiming to rally others around an initiative.';
+    }
+    if (lowerText.includes('i believe') || lowerText.includes('i think')) {
+      return 'Reflective and candid, sharing personal convictions.';
+    }
+    return 'Analytical and forward-looking.';
+  })();
+
+  const knowledgeDomain = (() => {
+    if (lowerTopic.includes('ai') || lowerText.includes('ai')) return 'Artificial intelligence and emerging technology.';
+    if (lowerTopic.includes('policy') || lowerText.includes('regulation')) return 'Technology policy and governance.';
+    if (lowerTopic.includes('finance') || lowerTopic.includes('investment')) return 'Finance and strategic planning.';
+    return 'General leadership and strategy.';
+  })();
+
+  const nameRegex = /\b([A-Z][a-z]+\s+[A-Z][a-z]+)\b/g;
+  const names = new Set();
+  let match;
+  while ((match = nameRegex.exec(item.text || '')) !== null) {
+    const candidate = match[1];
+    if (!personName || !candidate.toLowerCase().includes(personName.toLowerCase())) {
+      names.add(candidate);
+    }
+  }
+
+  return {
+    belief_expressed: belief,
+    speaking_style: style,
+    knowledge_domain: knowledgeDomain,
+    people_mentioned: Array.from(names),
+    response_pattern: 'Balances optimism with pragmatic acknowledgement of challenges.'
+  };
+}
+
 // Mock prompt generator output - for testing
 export const mockGeneratedPrompt = `You are a digital clone with the following personality:
 
