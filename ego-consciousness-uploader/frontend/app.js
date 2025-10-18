@@ -31,14 +31,22 @@ function setupEventListeners() {
   const recordBtn = document.getElementById('record-btn');
   const stopBtn = document.getElementById('stop-btn');
   const sendBtn = document.getElementById('send-btn');
+  const nameInput = document.getElementById('name-input');
   
   console.log('Found buttons:', { startBtn, recordBtn, stopBtn, sendBtn });
   
   if (startBtn) {
     startBtn.addEventListener('click', handleNameSubmit);
     console.log('Start button listener added');
-  } else {
-    console.error('Start button not found!');
+  }
+
+  if (nameInput) {
+    nameInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        handleNameSubmit();
+      }
+    });
+    console.log('Name input Enter-to-start enabled');
   }
   
   if (recordBtn) {
