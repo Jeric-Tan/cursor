@@ -219,20 +219,10 @@ function updateLoadingMessage(message) {
 // Emotion Recognition Functions
 async function startEmotionDetection() {
   try {
-    // Request camera access
-    state.cameraStream = await navigator.mediaDevices.getUserMedia({ 
-      video: { 
-        width: 640, 
-        height: 480,
-        facingMode: 'user'
-      } 
-    });
-    
-    // Set up video element
-    const video = document.getElementById('camera-feed');
-    video.srcObject = state.cameraStream;
+    console.log('🔗 Connecting to emotion recognition service...');
     
     // Connect to WebSocket for emotion data
+    // Note: We don't need browser camera access since backend captures directly
     await connectToEmotionWebSocket();
     
     // Update UI
@@ -242,9 +232,12 @@ async function startEmotionDetection() {
     
     state.isEmotionDetectionActive = true;
     
+    console.log('✅ Connected to emotion recognition service');
+    console.log('ℹ️  Backend is capturing video directly from your camera');
+    
   } catch (error) {
-    alert('Error accessing camera: ' + error.message);
-    console.error('Camera access error:', error);
+    alert('Error connecting to emotion service: ' + error.message);
+    console.error('Connection error:', error);
   }
 }
 
@@ -282,6 +275,11 @@ async function connectToEmotionWebSocket() {
 }
 
 function updateEmotionDisplay(data) {
+  // Always try to display the frame if available
+  if (data.frame && data.frame.length > 0) {
+    displayAnnotatedFrame(data.frame);
+  }
+  
   if (data.emotions && data.emotions.length > 0) {
     const emotion = data.emotions[0];
     const dominantEmotion = emotion.dominant_emotion;
@@ -294,11 +292,6 @@ function updateEmotionDisplay(data) {
     // Update state
     state.currentEmotion = dominantEmotion;
     state.emotionConfidence = confidence;
-    
-    // Update video with emotion annotations (if frame data is available)
-    if (data.frame) {
-      displayAnnotatedFrame(data.frame);
-    }
   } else {
     document.getElementById('current-emotion').textContent = 'No emotion detected';
     document.getElementById('emotion-confidence').textContent = 'Confidence: 0%';
@@ -306,29 +299,40 @@ function updateEmotionDisplay(data) {
 }
 
 function displayAnnotatedFrame(frameData) {
-  const video = document.getElementById('camera-feed');
   const canvas = document.getElementById('emotion-canvas');
-  const ctx = canvas.getContext('2d');
+  if (!canvas) {
+    console.error('Canvas element not found!');
+    return;
+  }
   
-  // Set canvas size to match video
-  canvas.width = video.videoWidth || 640;
-  canvas.height = video.videoHeight || 480;
+  const ctx = canvas.getContext('2d');
   
   // Create image from base64 data
   const img = new Image();
   img.onload = () => {
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    try {
+      // Set canvas size to match the image (only if different)
+      if (canvas.width !== img.width || canvas.height !== img.height) {
+        canvas.width = img.width;
+        canvas.height = img.height;
+      }
+      
+      // Clear canvas and draw the annotated frame
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0);
+    } catch (error) {
+      console.error('Error drawing image:', error);
+    }
   };
+  
+  img.onerror = () => {
+    console.error('Failed to load image from base64 data');
+  };
+  
   img.src = `data:image/jpeg;base64,${frameData}`;
 }
 
 function stopEmotionDetection() {
-  // Stop camera stream
-  if (state.cameraStream) {
-    state.cameraStream.getTracks().forEach(track => track.stop());
-    state.cameraStream = null;
-  }
-  
   // Close WebSocket connection
   if (state.websocket) {
     state.websocket.close();
@@ -341,11 +345,12 @@ function stopEmotionDetection() {
   
   state.isEmotionDetectionActive = false;
   
-  // Clear video and canvas
-  const video = document.getElementById('camera-feed');
+  // Clear canvas
   const canvas = document.getElementById('emotion-canvas');
-  video.srcObject = null;
-  canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+  if (canvas) {
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }
 }
 
 function continueToChat() {
