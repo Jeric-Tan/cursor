@@ -172,6 +172,7 @@ input[type="text"] {
   border: 2px solid #ddd;
   border-radius: 8px;
   font-size: 1rem;
+  transition: transform 180ms ease, box-shadow 200ms ease, border-color 180ms ease, background-color 180ms ease;
 }
 
 /* Make only the name input a glass text bubble */
@@ -187,6 +188,27 @@ input[type="text"] {
     inset 0 1px 0 0 rgba(255, 255, 255, 0.4),
     inset 0 -1px 0 0 rgba(255, 255, 255, 0.2);
   border-width: 1px !important;
+}
+
+/* Hover/focus raise animation for input */
+#name-input:hover,
+#name-input:focus {
+  transform: translateY(-3px);
+  border-color: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.3);
+  box-shadow:
+    0 12px 36px 0 rgba(31, 38, 135, 0.28),
+    0 4px 20px 0 rgba(31, 38, 135, 0.16),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.55),
+    inset 0 -1px 0 0 rgba(255, 255, 255, 0.25);
+}
+
+/* Apply a subtle lift to chat input as well */
+#chat-input:hover,
+#chat-input:focus {
+  transform: translateY(-2px);
+  border-color: #cfd4ff;
+  box-shadow: 0 8px 20px rgba(31, 38, 135, 0.15);
 }
 
 button {
