@@ -21,11 +21,31 @@ export const api = {
     return data;
   },
 
-  async uploadVoice(sessionId, audioBlob) {
-    // TODO: POST to /api/upload-voice with FormData
+  async uploadPictures(sessionId, photoBlobs) {
     const formData = new FormData();
     formData.append('sessionId', sessionId);
-    formData.append('audio', audioBlob, 'voice-sample.webm');
+
+    // Append each photo
+    photoBlobs.forEach((blob, index) => {
+      formData.append('photos', blob, `photo-${index + 1}.jpg`);
+    });
+
+    const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.UPLOAD_PICTURES}`, {
+      method: 'POST',
+      body: formData
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to upload pictures');
+    }
+
+    return await response.json();
+  },
+
+  async uploadVoice(sessionId, audioBlob) {
+    const formData = new FormData();
+    formData.append('sessionId', sessionId);
+    formData.append('audio', audioBlob, 'voice-sample.mp3');
 
     const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.UPLOAD_VOICE}`, {
       method: 'POST',

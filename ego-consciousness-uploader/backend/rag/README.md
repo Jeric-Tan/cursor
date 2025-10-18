@@ -62,7 +62,7 @@ const result = await rag.query('Your question', {
 ## How It Works
 
 1. **Indexing**: Scraped content is embedded using OpenAI's `text-embedding-3-small` model
-2. **Storage**: Embeddings are stored in-memory with JSON persistence to `data/vector-store.json`
+2. **Storage**: Embeddings are stored in-memory with JSON persistence per session at `data/vector-stores/<sessionId>.json`
 3. **Retrieval**: Questions are embedded and matched against stored vectors using cosine similarity
 4. **Generation**: Top-K documents are passed to GPT-4o-mini as context to generate answers
 

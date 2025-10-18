@@ -9,6 +9,7 @@ import { fileURLToPath } from 'url';
 
 import {
   handleStart,
+  handleUploadPictures,
   handleUploadVoice,
   handleGetStatus,
   handleChat,
@@ -50,6 +51,7 @@ app.use('/shared', express.static(path.join(__dirname, 'shared'), {
 
 // API Routes
 app.post('/api/start', handleStart);
+app.post('/api/upload-pictures', handleUploadPictures);
 app.post('/api/upload-voice', handleUploadVoice);
 app.get('/api/status', handleGetStatus);
 app.post('/api/chat', handleChat);

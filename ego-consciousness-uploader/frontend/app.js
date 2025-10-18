@@ -9,14 +9,12 @@ const state = {
   sessionId: null,
   userName: null,
   currentQuestionIndex: 0,
+  capturedPhotos: [],
   recordedAudio: null,
   messages: [],
-  // Emotion recognition state
   cameraStream: null,
-  websocket: null,
-  isEmotionDetectionActive: false,
-  currentEmotion: null,
-  emotionConfidence: 0
+  currentPhotoCount: 0,
+  audioChunks: []
 };
 
 // MediaRecorder for voice recording
@@ -36,22 +34,17 @@ function setupEventListeners() {
   const startBtn = document.getElementById('start-btn');
   const nameInput = document.getElementById('name-input');
 
-  // Voice recording stage
+  // Camera capture stage
+  const capturePhotoBtn = document.getElementById('capture-photo-btn');
   const recordBtn = document.getElementById('record-btn');
   const stopBtn = document.getElementById('stop-btn');
-
-  // Emotion recognition stage
-  const startCameraBtn = document.getElementById('start-camera-btn');
-  const stopCameraBtn = document.getElementById('stop-camera-btn');
-  const continueToChatBtn = document.getElementById('continue-to-chat-btn');
 
   // Chat stage
   const sendBtn = document.getElementById('send-btn');
   const chatInput = document.getElementById('chat-input');
 
   console.log('Found buttons:', {
-    startBtn, recordBtn, stopBtn, sendBtn,
-    startCameraBtn, stopCameraBtn, continueToChatBtn
+    startBtn, capturePhotoBtn, recordBtn, stopBtn, sendBtn
   });
 
   if (startBtn) {
@@ -68,6 +61,11 @@ function setupEventListeners() {
     console.log('Name input Enter-to-start enabled');
   }
 
+  if (capturePhotoBtn) {
+    capturePhotoBtn.addEventListener('click', capturePhoto);
+    console.log('Capture photo button listener added');
+  }
+
   if (recordBtn) {
     recordBtn.addEventListener('click', startRecording);
     console.log('Record button listener added');
@@ -76,21 +74,6 @@ function setupEventListeners() {
   if (stopBtn) {
     stopBtn.addEventListener('click', stopRecording);
     console.log('Stop button listener added');
-  }
-
-  if (startCameraBtn) {
-    startCameraBtn.addEventListener('click', startEmotionDetection);
-    console.log('Start camera button listener added');
-  }
-
-  if (stopCameraBtn) {
-    stopCameraBtn.addEventListener('click', stopEmotionDetection);
-    console.log('Stop camera button listener added');
-  }
-
-  if (continueToChatBtn) {
-    continueToChatBtn.addEventListener('click', continueToChat);
-    console.log('Continue to chat button listener added');
   }
 
   if (sendBtn) {
@@ -114,7 +97,7 @@ async function handleNameSubmit() {
   console.log('handleNameSubmit called!');
   const nameInput = document.getElementById('name-input');
   const name = nameInput.value.trim();
-  
+
   console.log('Name input value:', name);
 
   if (!name) {
@@ -123,25 +106,118 @@ async function handleNameSubmit() {
   }
 
   try {
-    // TODO: Call API to start session
     const response = await api.startSession(name);
     state.sessionId = response.sessionId;
     state.userName = name;
 
-    switchStage(STAGES.VOICE_RECORDING);
-    displayQuestion();
+    switchStage(STAGES.CAMERA_CAPTURE);
+    await startCamera();
   } catch (error) {
     alert('Error starting session: ' + error.message);
   }
 }
 
-// Stage 2: Voice Recording
+// Stage 2: Camera Capture
+async function startCamera() {
+  try {
+    state.cameraStream = await navigator.mediaDevices.getUserMedia({
+      video: { width: 640, height: 480 }
+    });
+
+    const videoElement = document.getElementById('camera-feed');
+    videoElement.srcObject = state.cameraStream;
+
+    console.log('Camera started successfully');
+  } catch (error) {
+    alert('Error accessing camera: ' + error.message);
+  }
+}
+
+const PHOTO_INSTRUCTIONS = [
+  "Picture 1 of 4: Look at the camera with a neutral expression",
+  "Picture 2 of 4: Smile naturally",
+  "Picture 3 of 4: Look slightly to the left",
+  "Picture 4 of 4: Look slightly to the right"
+];
+
+async function capturePhoto() {
+  const video = document.getElementById('camera-feed');
+  const canvas = document.getElementById('camera-canvas');
+  const ctx = canvas.getContext('2d');
+
+  // Set canvas size to match video
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+
+  // Draw current video frame to canvas
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+  // Convert canvas to blob
+  canvas.toBlob(async (blob) => {
+    state.capturedPhotos.push(blob);
+    state.currentPhotoCount++;
+
+    // Update UI to show photo was captured
+    const photoSlot = document.getElementById(`photo-slot-${state.currentPhotoCount}`);
+    photoSlot.style.backgroundImage = `url(${URL.createObjectURL(blob)})`;
+    photoSlot.style.backgroundSize = 'cover';
+    photoSlot.textContent = '';
+
+    if (state.currentPhotoCount < 4) {
+      // Update instruction for next photo
+      document.getElementById('photo-instruction').textContent =
+        PHOTO_INSTRUCTIONS[state.currentPhotoCount];
+    } else {
+      // All photos captured, upload and move to voice recording
+      await uploadPhotos();
+
+      // Stop camera
+      stopCamera();
+
+      // Hide camera section, show voice section
+      document.getElementById('camera-container').style.display = 'none';
+      document.getElementById('camera-instructions').style.display = 'none';
+      document.getElementById('camera-controls').style.display = 'none';
+      document.getElementById('voice-section').style.display = 'block';
+
+      // Display first question
+      displayQuestion();
+    }
+  }, 'image/jpeg', 0.95);
+}
+
+function stopCamera() {
+  if (state.cameraStream) {
+    state.cameraStream.getTracks().forEach(track => track.stop());
+    state.cameraStream = null;
+  }
+}
+
+async function uploadPhotos() {
+  try {
+    console.log('Uploading photos...');
+    await api.uploadPictures(state.sessionId, state.capturedPhotos);
+    console.log('Photos uploaded successfully');
+  } catch (error) {
+    console.error('Error uploading photos:', error);
+    alert('Error uploading photos: ' + error.message);
+  }
+}
+
+// Voice Recording
+let recordingStartTime = 0;
+let timerInterval = null;
+
 async function startRecording() {
   try {
-    // TODO: Request microphone access
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-    mediaRecorder = new MediaRecorder(stream);
+    // Use audio/mpeg if supported, otherwise fall back to webm
+    const mimeType = MediaRecorder.isTypeSupported('audio/mpeg')
+      ? 'audio/mpeg'
+      : 'audio/webm';
+
+    mediaRecorder = new MediaRecorder(stream, { mimeType });
     audioChunks = [];
 
     mediaRecorder.ondataavailable = (event) => {
@@ -149,18 +225,36 @@ async function startRecording() {
     };
 
     mediaRecorder.onstop = async () => {
-      const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-      state.recordedAudio = audioBlob;
+      const audioBlob = new Blob(audioChunks, { mimeType });
+      state.audioChunks.push({
+        question: INTERVIEW_QUESTIONS[state.currentQuestionIndex],
+        audio: audioBlob
+      });
 
-      // Upload voice and move to processing
-      await uploadVoice(audioBlob);
+      // Move to next question
+      state.currentQuestionIndex++;
+
+      if (state.currentQuestionIndex < INTERVIEW_QUESTIONS.length) {
+        displayQuestion();
+        document.getElementById('recording-status').textContent =
+          `Question ${state.currentQuestionIndex} of ${INTERVIEW_QUESTIONS.length} answered!`;
+      } else {
+        // All questions answered
+        document.getElementById('recording-status').textContent =
+          'All questions answered! Processing...';
+
+        // Combine all audio chunks and upload
+        await combineAndUploadAudio();
+      }
     };
 
     mediaRecorder.start();
     document.getElementById('record-btn').disabled = true;
     document.getElementById('stop-btn').disabled = false;
 
-    // TODO: Start timer display
+    // Start timer
+    recordingStartTime = Date.now();
+    timerInterval = setInterval(updateTimer, 100);
 
   } catch (error) {
     alert('Error accessing microphone: ' + error.message);
@@ -174,12 +268,49 @@ function stopRecording() {
 
     document.getElementById('record-btn').disabled = false;
     document.getElementById('stop-btn').disabled = true;
+
+    // Stop timer
+    if (timerInterval) {
+      clearInterval(timerInterval);
+      timerInterval = null;
+    }
+    document.getElementById('timer').textContent = '0:00';
   }
+}
+
+function updateTimer() {
+  const elapsed = Math.floor((Date.now() - recordingStartTime) / 1000);
+  const minutes = Math.floor(elapsed / 60);
+  const seconds = elapsed % 60;
+  document.getElementById('timer').textContent =
+    `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }
 
 function displayQuestion() {
   const questionDisplay = document.getElementById('question-display');
-  questionDisplay.textContent = INTERVIEW_QUESTIONS[state.currentQuestionIndex];
+  questionDisplay.innerHTML = `
+    <p><strong>Question ${state.currentQuestionIndex + 1} of ${INTERVIEW_QUESTIONS.length}:</strong></p>
+    <p>${INTERVIEW_QUESTIONS[state.currentQuestionIndex]}</p>
+  `;
+}
+
+async function combineAndUploadAudio() {
+  try {
+    // For simplicity, we'll concatenate the audio blobs
+    // In production, you might want to process this on the backend
+    const allAudioData = [];
+    for (const item of state.audioChunks) {
+      allAudioData.push(item.audio);
+    }
+
+    const combinedBlob = new Blob(allAudioData, {
+      type: state.audioChunks[0].audio.type
+    });
+
+    await uploadVoice(combinedBlob);
+  } catch (error) {
+    alert('Error combining audio: ' + error.message);
+  }
 }
 
 async function uploadVoice(audioBlob) {
@@ -187,17 +318,15 @@ async function uploadVoice(audioBlob) {
     switchStage(STAGES.PROCESSING);
     updateLoadingMessage('Uploading voice sample...');
 
-    // TODO: Upload to backend
     await api.uploadVoice(state.sessionId, audioBlob);
 
     updateLoadingMessage('Cloning your voice...');
     updateLoadingMessage('Scraping the web for your digital footprint...');
     updateLoadingMessage('Generating your Ego...');
 
-    // TODO: Poll for completion
     await pollForCompletion();
 
-    switchStage(STAGES.EMOTION_RECOGNITION);
+    switchStage(STAGES.CHAT);
   } catch (error) {
     alert('Error uploading voice: ' + error.message);
   }
@@ -205,7 +334,6 @@ async function uploadVoice(audioBlob) {
 
 // Stage 3: Processing - Poll until Ego is ready
 async function pollForCompletion() {
-  // TODO: Poll /api/status until isEgoReady is true
   return new Promise((resolve) => {
     const interval = setInterval(async () => {
       try {
@@ -306,149 +434,4 @@ function updateLoadingMessage(message) {
   if (loadingMessage) {
     loadingMessage.textContent = message;
   }
-}
-
-// Emotion Recognition Functions
-async function startEmotionDetection() {
-  try {
-    console.log('🔗 Connecting to emotion recognition service...');
-    
-    // Connect to WebSocket for emotion data
-    // Note: We don't need browser camera access since backend captures directly
-    await connectToEmotionWebSocket();
-    
-    // Update UI
-    document.getElementById('start-camera-btn').disabled = true;
-    document.getElementById('stop-camera-btn').disabled = false;
-    document.getElementById('continue-to-chat-btn').disabled = false;
-    
-    state.isEmotionDetectionActive = true;
-    
-    console.log('✅ Connected to emotion recognition service');
-    console.log('ℹ️  Backend is capturing video directly from your camera');
-    
-  } catch (error) {
-    alert('Error connecting to emotion service: ' + error.message);
-    console.error('Connection error:', error);
-  }
-}
-
-async function connectToEmotionWebSocket() {
-  try {
-    // Connect to Python backend WebSocket
-    state.websocket = new WebSocket('ws://localhost:8765');
-    
-    state.websocket.onopen = () => {
-      console.log('Connected to emotion recognition service');
-    };
-    
-    state.websocket.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type === 'emotion_frame') {
-          updateEmotionDisplay(data);
-        }
-      } catch (error) {
-        console.error('Error parsing emotion data:', error);
-      }
-    };
-    
-    state.websocket.onclose = () => {
-      console.log('Disconnected from emotion recognition service');
-    };
-    
-    state.websocket.onerror = (error) => {
-      console.error('WebSocket error:', error);
-    };
-    
-  } catch (error) {
-    console.error('Error connecting to emotion service:', error);
-  }
-}
-
-function updateEmotionDisplay(data) {
-  // Always try to display the frame if available
-  if (data.frame && data.frame.length > 0) {
-    displayAnnotatedFrame(data.frame);
-  }
-  
-  if (data.emotions && data.emotions.length > 0) {
-    const emotion = data.emotions[0];
-    const dominantEmotion = emotion.dominant_emotion;
-    const confidence = Math.round(emotion.emotion[dominantEmotion] * 100);
-    
-    // Update emotion display
-    document.getElementById('current-emotion').textContent = dominantEmotion;
-    document.getElementById('emotion-confidence').textContent = `Confidence: ${confidence}%`;
-    
-    // Update state
-    state.currentEmotion = dominantEmotion;
-    state.emotionConfidence = confidence;
-  } else {
-    document.getElementById('current-emotion').textContent = 'No emotion detected';
-    document.getElementById('emotion-confidence').textContent = 'Confidence: 0%';
-  }
-}
-
-function displayAnnotatedFrame(frameData) {
-  const canvas = document.getElementById('emotion-canvas');
-  if (!canvas) {
-    console.error('Canvas element not found!');
-    return;
-  }
-  
-  const ctx = canvas.getContext('2d');
-  
-  // Create image from base64 data
-  const img = new Image();
-  img.onload = () => {
-    try {
-      // Set canvas size to match the image (only if different)
-      if (canvas.width !== img.width || canvas.height !== img.height) {
-        canvas.width = img.width;
-        canvas.height = img.height;
-      }
-      
-      // Clear canvas and draw the annotated frame
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(img, 0, 0);
-    } catch (error) {
-      console.error('Error drawing image:', error);
-    }
-  };
-  
-  img.onerror = () => {
-    console.error('Failed to load image from base64 data');
-  };
-  
-  img.src = `data:image/jpeg;base64,${frameData}`;
-}
-
-function stopEmotionDetection() {
-  // Close WebSocket connection
-  if (state.websocket) {
-    state.websocket.close();
-    state.websocket = null;
-  }
-  
-  // Update UI
-  document.getElementById('start-camera-btn').disabled = false;
-  document.getElementById('stop-camera-btn').disabled = true;
-  
-  state.isEmotionDetectionActive = false;
-  
-  // Clear canvas
-  const canvas = document.getElementById('emotion-canvas');
-  if (canvas) {
-    const ctx = canvas.getContext('2d');
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-  }
-}
-
-function continueToChat() {
-  // Stop emotion detection
-  stopEmotionDetection();
-  
-  // Move to chat stage
-  switchStage(STAGES.CHAT);
 }

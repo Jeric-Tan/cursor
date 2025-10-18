@@ -6,14 +6,21 @@ import { cosineSimilarity } from './embeddings.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+// Default global store path (kept for backward compatibility)
 const STORE_PATH = join(__dirname, '..', '..', 'data', 'vector-store.json');
+
+// Helper to compute a per-session store path
+export function storePathForSession(sessionId) {
+  return join(__dirname, '..', '..', 'data', 'vector-stores', `${sessionId}.json`);
+}
 
 /**
  * Simple in-memory vector store with persistence
  */
 export class VectorStore {
-  constructor() {
+  constructor(storePath = STORE_PATH) {
     this.documents = [];
+    this.storePath = storePath;
   }
 
   /**
@@ -51,8 +58,8 @@ export class VectorStore {
    * Save vector store to disk
    */
   async save() {
-    await fs.mkdir(dirname(STORE_PATH), { recursive: true });
-    await fs.writeFile(STORE_PATH, JSON.stringify(this.documents, null, 2), 'utf-8');
+    await fs.mkdir(dirname(this.storePath), { recursive: true });
+    await fs.writeFile(this.storePath, JSON.stringify(this.documents, null, 2), 'utf-8');
   }
 
   /**
@@ -60,7 +67,7 @@ export class VectorStore {
    */
   async load() {
     try {
-      const data = await fs.readFile(STORE_PATH, 'utf-8');
+      const data = await fs.readFile(this.storePath, 'utf-8');
       this.documents = JSON.parse(data);
     } catch (err) {
       if (err.code !== 'ENOENT') throw err;

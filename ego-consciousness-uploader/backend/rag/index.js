@@ -2,7 +2,7 @@ import { promises as fs } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { embed } from './embeddings.js';
-import { VectorStore } from './vector-store.js';
+import { VectorStore, storePathForSession } from './vector-store.js';
 import { ragQuery } from './query.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -64,7 +64,9 @@ export async function indexSession(sessionId, vectorStore) {
  * @returns {Promise<Object>} - RAG pipeline interface
  */
 export async function initRAG(sessionId) {
-  const vectorStore = new VectorStore();
+  // Use a per-session vector store file
+  const pathForSession = storePathForSession(sessionId);
+  const vectorStore = new VectorStore(pathForSession);
 
   // Try to load existing vector store
   await vectorStore.load();

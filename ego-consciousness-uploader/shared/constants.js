@@ -2,14 +2,14 @@
 
 export const STAGES = {
   NAME_INPUT: 'name-input',
-  VOICE_RECORDING: 'voice-recording',
+  CAMERA_CAPTURE: 'camera-capture',
   PROCESSING: 'processing',
-  EMOTION_RECOGNITION: 'emotion-recognition',
   CHAT: 'chat'
 };
 
 export const API_ENDPOINTS = {
   START: '/api/start',
+  UPLOAD_PICTURES: '/api/upload-pictures',
   UPLOAD_VOICE: '/api/upload-voice',
   CHAT: '/api/chat',
   STATUS: '/api/status',

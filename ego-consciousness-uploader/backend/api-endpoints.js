@@ -15,6 +15,12 @@ import { simulateSmitheryWebhook } from "./mock-data.js";
 import { ConsciousnessScraper, validateConfig } from "./scraper/index.js";
 import { saveScrapedSnapshot } from "./storage/scraped-store.js";
 import { initRAG } from "./rag/index.js";
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const ENABLE_MCP_SCRAPER = process.env.ENABLE_MCP_SCRAPER !== "false";
 let hasLoggedScraperConfig = false;
@@ -111,6 +117,52 @@ export async function handleStart(req, res) {
   }
 }
 
+// POST /api/upload-pictures
+export async function handleUploadPictures(req, res) {
+  try {
+    const { sessionId } = req.body;
+    const photos = req.files?.photos;
+
+    if (!sessionId) {
+      return res.status(400).json({ error: "Session ID is required" });
+    }
+
+    if (!photos) {
+      return res.status(400).json({ error: "Photos are required" });
+    }
+
+    // Create directory for this session's photos
+    const dataDir = path.join(__dirname, '..', 'data', 'photos', sessionId);
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+
+    // Handle single photo or array of photos
+    const photoArray = Array.isArray(photos) ? photos : [photos];
+
+    const savedPaths = [];
+    for (let i = 0; i < photoArray.length; i++) {
+      const photo = photoArray[i];
+      const photoPath = path.join(dataDir, `photo-${i + 1}.jpg`);
+
+      // Save photo to disk
+      fs.writeFileSync(photoPath, photo.data);
+      savedPaths.push(photoPath);
+
+      console.log(`Saved photo ${i + 1} to ${photoPath}`);
+    }
+
+    res.json({
+      success: true,
+      photoCount: photoArray.length,
+      paths: savedPaths
+    });
+  } catch (error) {
+    console.error("Error in handleUploadPictures:", error);
+    res.status(500).json({ error: "Failed to upload pictures" });
+  }
+}
+
 // POST /api/upload-voice
 export async function handleUploadVoice(req, res) {
   try {
@@ -123,21 +175,40 @@ export async function handleUploadVoice(req, res) {
         .json({ error: "Session ID and audio file are required" });
     }
 
-    // Upload audio to Supabase Storage
-    const audioUrl = await uploadAudio(sessionId, audioFile.data);
+    // Create directory for this session's audio
+    const dataDir = path.join(__dirname, '..', 'data', 'audio', sessionId);
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
 
-    // Clone voice with ElevenLabs (Jeric/Jasper's code)
-    const voiceId = await cloneVoice(audioUrl, sessionId);
+    // Determine file extension from mime type
+    const extension = audioFile.mimetype.includes('mpeg') ? 'mp3' : 'webm';
+    const audioPath = path.join(dataDir, `voice-sample.${extension}`);
 
-    // Update profile with voice ID
-    await updateProfile(sessionId, {
-      voice_sample_url: audioUrl,
-      elevenlabs_voice_id: voiceId,
-    });
+    // Save audio to disk
+    fs.writeFileSync(audioPath, audioFile.data);
+    console.log(`Saved audio to ${audioPath}`);
+
+    // Also upload to Supabase if configured
+    let audioUrl = audioPath;
+    let voiceId = null;
+
+    try {
+      audioUrl = await uploadAudio(sessionId, audioFile.data);
+      voiceId = await cloneVoice(audioUrl, sessionId);
+
+      await updateProfile(sessionId, {
+        voice_sample_url: audioUrl,
+        elevenlabs_voice_id: voiceId,
+      });
+    } catch (uploadError) {
+      console.warn("Supabase/ElevenLabs upload skipped:", uploadError.message);
+    }
 
     res.json({
       success: true,
       voiceId,
+      localPath: audioPath
     });
   } catch (error) {
     console.error("Error in handleUploadVoice:", error);

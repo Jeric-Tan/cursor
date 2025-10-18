@@ -24,13 +24,35 @@
         <p class="subtext">upload yourself.</p>
 
 
-        <!-- Stage 2: Voice Recording -->
-        <div id="voice-recording-stage" class="stage hidden">
-            <h2>Record Your Voice</h2>
-            <div id="question-display"></div>
-            <button id="record-btn">Start Recording</button>
-            <button id="stop-btn" disabled>Stop Recording</button>
-            <div id="timer">0:00</div>
+        <!-- Stage 2: Camera Capture + Voice Recording -->
+        <div id="camera-capture-stage" class="stage hidden">
+            <h2 id="capture-title">Step 1: Take 4 Pictures</h2>
+            <div id="camera-container">
+                <video id="camera-feed" autoplay muted></video>
+                <canvas id="camera-canvas" style="display: none;"></canvas>
+            </div>
+            <div id="camera-instructions">
+                <p id="photo-instruction">Picture 1 of 4: Look at the camera with a neutral expression</p>
+                <div id="captured-photos">
+                    <div class="photo-slot" id="photo-slot-1">1</div>
+                    <div class="photo-slot" id="photo-slot-2">2</div>
+                    <div class="photo-slot" id="photo-slot-3">3</div>
+                    <div class="photo-slot" id="photo-slot-4">4</div>
+                </div>
+            </div>
+            <div id="camera-controls">
+                <button id="capture-photo-btn">Capture Photo</button>
+            </div>
+
+            <!-- Voice Recording Section (shown after photos) -->
+            <div id="voice-section" style="display: none;">
+                <h2>Step 2: Answer the Questions</h2>
+                <div id="question-display"></div>
+                <button id="record-btn">Start Recording</button>
+                <button id="stop-btn" disabled>Stop Recording</button>
+                <div id="timer">0:00</div>
+                <div id="recording-status"></div>
+            </div>
         </div>
 
         <!-- Stage 3: Processing -->
@@ -40,25 +62,7 @@
             <div class="spinner"></div>
         </div>
 
-        <!-- Stage 4: Emotion Recognition -->
-        <div id="emotion-recognition-stage" class="stage hidden">
-            <h2>Emotion Recognition</h2>
-            <div id="camera-container">
-                <video id="camera-feed" autoplay muted style="display: none;"></video>
-                <canvas id="emotion-canvas"></canvas>
-            </div>
-            <div id="emotion-display">
-                <div id="current-emotion">No emotion detected</div>
-                <div id="emotion-confidence">Confidence: 0%</div>
-            </div>
-            <div id="emotion-controls">
-                <button id="start-camera-btn">Start Camera</button>
-                <button id="stop-camera-btn" disabled>Stop Camera</button>
-                <button id="continue-to-chat-btn" disabled>Continue to Chat</button>
-            </div>
-        </div>
-
-        <!-- Stage 5: Chat -->
+        <!-- Stage 4: Chat -->
         <div id="chat-stage" class="stage hidden">
             <h2>Chat with Your Ego</h2>
             <div id="chat-messages"></div>
