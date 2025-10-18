@@ -135,7 +135,9 @@ h1 {
   text-shadow:
     0 8px 32px rgba(31, 38, 135, 0.2),
     0 2px 16px rgba(31, 38, 135, 0.1);
-  animation: fadeUp 800ms ease-out both;
+  animation: fadeUp 800ms ease-out both, egoIdle 10s ease-in-out infinite 1s;
+  will-change: transform, text-shadow;
+  transform-origin: center bottom;
 }
 
 /* Responsive sizes to approximate sm:text-8xl and lg:text-9xl */
@@ -266,6 +268,28 @@ button:active:not(:disabled) {
 @keyframes hueShift {
   from { filter: hue-rotate(0deg) saturate(1); }
   to { filter: hue-rotate(20deg) saturate(1.1); }
+}
+
+/* Idle animation for the Ego logo/h1 */
+@keyframes egoIdle {
+  0% {
+    transform: translateY(0) scale(1);
+    text-shadow:
+      0 8px 32px rgba(31, 38, 135, 0.20),
+      0 2px 16px rgba(31, 38, 135, 0.10);
+  }
+  50% {
+    transform: translateY(-4px) scale(1.07);
+    text-shadow:
+      0 12px 40px rgba(31, 38, 135, 0.28),
+      0 4px 20px rgba(31, 38, 135, 0.16);
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    text-shadow:
+      0 8px 32px rgba(31, 38, 135, 0.20),
+      0 2px 16px rgba(31, 38, 135, 0.10);
+  }
 }
 
 #loading-message {
