@@ -167,12 +167,14 @@ export async function handleUploadPictures(req, res) {
 export async function handleUploadVoice(req, res) {
   try {
     const { sessionId } = req.body;
-    const audioFile = req.files?.audio;
+    const audioFiles = req.files?.audioFiles;
 
-    if (!sessionId || !audioFile) {
-      return res
-        .status(400)
-        .json({ error: "Session ID and audio file are required" });
+    if (!sessionId) {
+      return res.status(400).json({ error: "Session ID is required" });
+    }
+
+    if (!audioFiles) {
+      return res.status(400).json({ error: "Audio files are required" });
     }
 
     // Create directory for this session's audio
@@ -181,24 +183,58 @@ export async function handleUploadVoice(req, res) {
       fs.mkdirSync(dataDir, { recursive: true });
     }
 
-    // Determine file extension from mime type
-    const extension = audioFile.mimetype.includes('mpeg') ? 'mp3' : 'webm';
-    const audioPath = path.join(dataDir, `voice-sample.${extension}`);
+    // Handle single audio file or array of audio files
+    const audioArray = Array.isArray(audioFiles) ? audioFiles : [audioFiles];
 
-    // Save audio to disk
-    fs.writeFileSync(audioPath, audioFile.data);
-    console.log(`Saved audio to ${audioPath}`);
+    const savedPaths = [];
+    const questions = [];
 
-    // Also upload to Supabase if configured
-    let audioUrl = audioPath;
+    for (let i = 0; i < audioArray.length; i++) {
+      const audioFile = audioArray[i];
+
+      // Determine file extension from mime type
+      const extension = audioFile.mimetype.includes('mpeg') ? 'mp3' :
+                       audioFile.mimetype.includes('wav') ? 'wav' : 'webm';
+
+      const audioPath = path.join(dataDir, `answer-${i + 1}.${extension}`);
+
+      // Save audio to disk
+      fs.writeFileSync(audioPath, audioFile.data);
+      savedPaths.push(audioPath);
+
+      // Get the corresponding question
+      const questionKey = `question-${i + 1}`;
+      const question = req.body[questionKey] || `Question ${i + 1}`;
+      questions.push(question);
+
+      console.log(`Saved answer ${i + 1} to ${audioPath}`);
+      console.log(`Question: ${question}`);
+    }
+
+    // Save questions to a metadata file
+    const metadataPath = path.join(dataDir, 'metadata.json');
+    fs.writeFileSync(metadataPath, JSON.stringify({
+      sessionId,
+      timestamp: new Date().toISOString(),
+      audioFiles: savedPaths.map((path, i) => ({
+        path,
+        question: questions[i],
+        filename: `answer-${i + 1}`
+      }))
+    }, null, 2));
+
+    console.log(`Saved metadata to ${metadataPath}`);
+
+    // Try to upload to Supabase/ElevenLabs if configured
     let voiceId = null;
-
     try {
-      audioUrl = await uploadAudio(sessionId, audioFile.data);
-      voiceId = await cloneVoice(audioUrl, sessionId);
+      // For ElevenLabs, we could concatenate or use the first file
+      // For now, let's use the first audio file as the voice sample
+      const firstAudioUrl = await uploadAudio(sessionId, audioArray[0].data);
+      voiceId = await cloneVoice(firstAudioUrl, sessionId);
 
       await updateProfile(sessionId, {
-        voice_sample_url: audioUrl,
+        voice_sample_url: firstAudioUrl,
         elevenlabs_voice_id: voiceId,
       });
     } catch (uploadError) {
@@ -208,7 +244,9 @@ export async function handleUploadVoice(req, res) {
     res.json({
       success: true,
       voiceId,
-      localPath: audioPath
+      audioCount: audioArray.length,
+      localPaths: savedPaths,
+      metadataPath
     });
   } catch (error) {
     console.error("Error in handleUploadVoice:", error);
