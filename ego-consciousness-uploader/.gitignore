@@ -8,3 +8,7 @@ build/
 data/
 
 .smithery/
+*.png
+*.jpg
+*.gif
+temp/
