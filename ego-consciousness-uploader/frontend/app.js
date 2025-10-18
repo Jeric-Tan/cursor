@@ -296,17 +296,9 @@ function displayQuestion() {
 
 async function combineAndUploadAudio() {
   try {
-    // For simplicity, we'll concatenate the audio blobs
-    // In production, you might want to process this on the backend
-    const allAudioData = [];
-    for (const item of state.audioChunks) {
-      allAudioData.push(item.audio);
-    }
-
-    const combinedBlob = new Blob(allAudioData, {
-      type: state.audioChunks[0].audio.type
-    });
-
+    // Concatenate the per-answer recordings using Web Audio and export as WAV
+    const blobs = state.audioChunks.map(item => item.audio);
+    const combinedBlob = await concatenateAudioBlobsToWav(blobs);
     await uploadVoice(combinedBlob);
   } catch (error) {
     alert('Error combining audio: ' + error.message);
@@ -329,6 +321,95 @@ async function uploadVoice(audioBlob) {
     switchStage(STAGES.CHAT);
   } catch (error) {
     alert('Error uploading voice: ' + error.message);
+  }
+}
+
+// Use Web Audio API to concatenate multiple blobs into a single WAV
+async function concatenateAudioBlobsToWav(blobs) {
+  const AudioContextClass = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+  const TempAudioContext = window.AudioContext || window.webkitAudioContext;
+  const tempCtx = new TempAudioContext();
+
+  // Decode all blobs
+  const decoded = [];
+  for (const blob of blobs) {
+    const arrayBuf = await blob.arrayBuffer();
+    const audioBuf = await tempCtx.decodeAudioData(arrayBuf);
+    decoded.push(audioBuf);
+  }
+
+  // Close temp context to free resources
+  if (tempCtx && tempCtx.close) {
+    try { await tempCtx.close(); } catch (_) {}
+  }
+
+  // Determine channels and sample rate; use the first buffer as reference
+  const channels = Math.max(...decoded.map(b => b.numberOfChannels));
+  const sampleRate = decoded[0]?.sampleRate || 44100;
+
+  // Total duration in seconds
+  const totalDuration = decoded.reduce((acc, b) => acc + b.duration, 0);
+  const offline = new AudioContextClass(channels, Math.ceil(totalDuration * sampleRate), sampleRate);
+
+  // Schedule buffers back-to-back
+  let offset = 0;
+  for (const buf of decoded) {
+    const src = offline.createBufferSource();
+    src.buffer = buf;
+    src.connect(offline.destination);
+    src.start(offset);
+    offset += buf.duration;
+  }
+
+  const rendered = await offline.startRendering();
+  return audioBufferToWavBlob(rendered);
+}
+
+function audioBufferToWavBlob(buffer) {
+  const numOfChan = buffer.numberOfChannels;
+  const sampleRate = buffer.sampleRate;
+  const length = buffer.length * numOfChan * 2 + 44; // 16-bit PCM
+  const bufferArray = new ArrayBuffer(length);
+  const view = new DataView(bufferArray);
+
+  // RIFF/WAVE header
+  writeString(view, 0, 'RIFF');
+  view.setUint32(4, 36 + buffer.length * numOfChan * 2, true);
+  writeString(view, 8, 'WAVE');
+  writeString(view, 12, 'fmt ');
+  view.setUint32(16, 16, true);               // PCM chunk size
+  view.setUint16(20, 1, true);                // format = PCM
+  view.setUint16(22, numOfChan, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * numOfChan * 2, true); // byte rate
+  view.setUint16(32, numOfChan * 2, true);    // block align
+  view.setUint16(34, 16, true);               // bits per sample
+  writeString(view, 36, 'data');
+  view.setUint32(40, buffer.length * numOfChan * 2, true);
+
+  // Interleave channels
+  const channels = [];
+  for (let i = 0; i < numOfChan; i++) {
+    channels.push(buffer.getChannelData(i));
+  }
+
+  let offset = 44;
+  const sampleCount = buffer.length;
+  for (let i = 0; i < sampleCount; i++) {
+    for (let ch = 0; ch < numOfChan; ch++) {
+      // Clamp and convert to 16-bit
+      let s = Math.max(-1, Math.min(1, channels[ch][i]));
+      view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+      offset += 2;
+    }
+  }
+
+  return new Blob([view], { type: 'audio/wav' });
+}
+
+function writeString(view, offset, string) {
+  for (let i = 0; i < string.length; i++) {
+    view.setUint8(offset + i, string.charCodeAt(i));
   }
 }
 
