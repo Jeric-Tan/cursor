@@ -55,12 +55,16 @@ ELEVENLABS_API_KEY=your-elevenlabs-key
 OPENAI_API_KEY=your-openai-key
 # Optional: Use Anthropic instead of OpenAI for scraping enrichment
 # ANTHROPIC_API_KEY=your-anthropic-key
+# Optional: Use xAI Grok for scraper enrichment
+# GROK_API_KEY=your-grok-key
 
 # Optional scraper tuning
 # OPENAI_SCRAPER_MODEL=gpt-4o-mini
 # ANTHROPIC_SCRAPER_MODEL=claude-3-5-sonnet-20241022
 # SCRAPER_ENRICH_MAX_CHARS=1600
+# GROK_SCRAPER_MODEL=grok-2-1212
 # ENABLE_SCRAPER_ENRICHMENT=true
+# SCRAPER_ENRICH_PROVIDER=grok|openai|anthropic
 ```
 
 **Note:** You can add keys incrementally! Each service falls back to mock mode if its key is missing:

@@ -2,12 +2,32 @@ import { mockEnrichContentItem } from '../mock-data.js';
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
-const USE_MOCK_ENRICHER = !OPENAI_API_KEY && !ANTHROPIC_API_KEY;
+const GROK_API_KEY = process.env.GROK_API_KEY;
+const SCRAPER_ENRICH_PROVIDER = process.env.SCRAPER_ENRICH_PROVIDER;
 
-const ENABLE_ENRICHMENT = process.env.ENABLE_SCRAPER_ENRICHMENT !== 'false';
+const ENABLE_ENRICHMENT = process.env.ENABLE_SCRAPER_ENRICHMENT === 'true';
 
 const OPENAI_MODEL = process.env.OPENAI_SCRAPER_MODEL || 'gpt-4o-mini';
-const ANTHROPIC_MODEL = process.env.ANTHROPIC_SCRAPER_MODEL || 'claude-3-5-sonnet-20241022';
+const ANTHROPIC_MODEL = process.env.ANTHROPIC_SCRAPER_MODEL || 'claude-3-5-haiku-20241022';
+const GROK_MODEL = process.env.GROK_SCRAPER_MODEL || 'grok-2-1212';
+
+const PROVIDER = (() => {
+  if (!ENABLE_ENRICHMENT) return 'disabled';
+
+  if (SCRAPER_ENRICH_PROVIDER) {
+    const normalized = SCRAPER_ENRICH_PROVIDER.toLowerCase();
+    if (normalized === 'grok' && GROK_API_KEY) return 'grok';
+    if (normalized === 'openai' && OPENAI_API_KEY) return 'openai';
+    if (normalized === 'anthropic' && ANTHROPIC_API_KEY) return 'anthropic';
+  }
+
+  if (ANTHROPIC_API_KEY) return 'anthropic';
+  if (GROK_API_KEY) return 'grok';
+  if (OPENAI_API_KEY) return 'openai';
+  return 'mock';
+})();
+
+const USE_MOCK_ENRICHER = PROVIDER === 'mock';
 
 const MAX_SNIPPET_LENGTH = parseInt(process.env.SCRAPER_ENRICH_MAX_CHARS || '1600', 10);
 
@@ -15,6 +35,8 @@ export async function enrichScrapedContent(personName, scrapedContent) {
   if (!ENABLE_ENRICHMENT) {
     return;
   }
+
+  logProvider();
 
   if (!Array.isArray(scrapedContent) || scrapedContent.length === 0) {
     return;
@@ -41,21 +63,22 @@ async function generateEnrichment(personName, item) {
     return null;
   }
 
-  if (USE_MOCK_ENRICHER) {
+  if (USE_MOCK_ENRICHER || PROVIDER === 'mock') {
     return mockEnrichContentItem(personName, item);
   }
 
   const prompt = buildPrompt(personName, item);
 
-  if (OPENAI_API_KEY) {
-    return callOpenAI(prompt);
+  switch (PROVIDER) {
+    case 'grok':
+      return callGrok(prompt);
+    case 'openai':
+      return callOpenAI(prompt);
+    case 'anthropic':
+      return callAnthropic(prompt);
+    default:
+      return mockEnrichContentItem(personName, item);
   }
-
-  if (ANTHROPIC_API_KEY) {
-    return callAnthropic(prompt);
-  }
-
-  return mockEnrichContentItem(personName, item);
 }
 
 function buildPrompt(personName, item) {
@@ -168,6 +191,45 @@ async function callAnthropic(prompt) {
   }
 }
 
+async function callGrok(prompt) {
+  try {
+    const response = await fetch('https://api.x.ai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${GROK_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: GROK_MODEL,
+        temperature: 0.2,
+        response_format: { type: 'json_object' },
+        messages: [
+          {
+            role: 'system',
+            content: 'You generate structured JSON profiles capturing beliefs and speaking style from short quotes. Always reply with JSON only.',
+          },
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
+      }),
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`Grok API error: ${response.status} ${text}`);
+    }
+
+    const payload = await response.json();
+    const content = payload?.choices?.[0]?.message?.content;
+    return parseJson(content);
+  } catch (error) {
+    console.warn('[SCRAPER] Grok enrichment failed:', error);
+    throw error;
+  }
+}
+
 function parseJson(value) {
   if (!value) {
     throw new Error('Empty response from LLM');
@@ -182,5 +244,29 @@ function parseJson(value) {
       return JSON.parse(match[0]);
     }
     throw error;
+  }
+}
+
+let providerLogged = false;
+
+function logProvider() {
+  if (providerLogged) return;
+  providerLogged = true;
+
+  switch (PROVIDER) {
+    case 'disabled':
+      console.log('[SCRAPER] Enrichment disabled via ENABLE_SCRAPER_ENRICHMENT=false');
+      break;
+    case 'grok':
+      console.log('[SCRAPER] Enriching snippets with Grok');
+      break;
+    case 'openai':
+      console.log('[SCRAPER] Enriching snippets with OpenAI');
+      break;
+    case 'anthropic':
+      console.log('[SCRAPER] Enriching snippets with Anthropic');
+      break;
+    default:
+      console.log('[SCRAPER] Enriching snippets with heuristic fallback (no LLM keys provided)');
   }
 }

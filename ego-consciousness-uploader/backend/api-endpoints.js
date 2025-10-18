@@ -55,7 +55,7 @@ async function triggerScraper(sessionId, fullName) {
   }
 
   const scraper = new ConsciousnessScraper();
-  const scrapedData = await scraper.scrape({ name: fullName, limit: 50 });
+  const scrapedData = await scraper.scrape({ name: fullName, limit: 30 });
   await applyScrapedData(sessionId, scrapedData, "SCRAPER", { fullName });
 }
 
