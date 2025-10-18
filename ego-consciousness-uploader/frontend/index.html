@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ego - Consciousness Uploader</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+    <link rel="preload" href="fonts/cy-grotesk-key-2.ttf" as="font" type="font/ttf" crossorigin>
+  </head>
+  <body>
+    <h1>Ego</h1>
+    <!-- <p class="subtext">upload yourself.</p> -->
+    <div id="app">
+      <!-- JAKE/ZHENGFENG: Add your UI here -->
+
+        <!-- Stage 1: Name Input -->
+        <div id="name-input-stage" class="stage active">
+            <input type="text" id="name-input" placeholder="Your full name." />
+        </div>
+        <p class="subtext">upload yourself.</p>
+
+
+        <!-- Stage 2: Voice Recording -->
+        <div id="voice-recording-stage" class="stage hidden">
+            <h2>Record Your Voice</h2>
+            <div id="question-display"></div>
+            <button id="record-btn">Start Recording</button>
+            <button id="stop-btn" disabled>Stop Recording</button>
+            <div id="timer">0:00</div>
+        </div>
+
+        <!-- Stage 3: Processing -->
+        <div id="processing-stage" class="stage hidden">
+            <h2>Creating Your Ego...</h2>
+            <div id="loading-message">Processing...</div>
+            <div class="spinner"></div>
+        </div>
+
+        <!-- Stage 4: Emotion Recognition -->
+        <div id="emotion-recognition-stage" class="stage hidden">
+            <h2>Emotion Recognition</h2>
+            <div id="camera-container">
+                <video id="camera-feed" autoplay muted style="display: none;"></video>
+                <canvas id="emotion-canvas"></canvas>
+            </div>
+            <div id="emotion-display">
+                <div id="current-emotion">No emotion detected</div>
+                <div id="emotion-confidence">Confidence: 0%</div>
+            </div>
+            <div id="emotion-controls">
+                <button id="start-camera-btn">Start Camera</button>
+                <button id="stop-camera-btn" disabled>Stop Camera</button>
+                <button id="continue-to-chat-btn" disabled>Continue to Chat</button>
+            </div>
+        </div>
+
+        <!-- Stage 5: Chat -->
+        <div id="chat-stage" class="stage hidden">
+            <h2>Chat with Your Ego</h2>
+            <div id="chat-messages"></div>
+            <div id="chat-input-container">
+                <input type="text" id="chat-input" placeholder="Type a message..." />
+                <button id="send-btn">Send</button>
+            </div>
+            <audio id="audio-player" controls style="display: none;"></audio>
+        </div>
+    </div>
+
+    <script type="module" src="app.js"></script>
+</body>
+</html>
