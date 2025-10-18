@@ -21,10 +21,59 @@ const state = {
 let mediaRecorder = null;
 let audioChunks = [];
 
+// Lightweight speech synthesis helper for Ego responses
+const speechSynth = (() => {
+  const supported = typeof window !== 'undefined' &&
+    'speechSynthesis' in window &&
+    'SpeechSynthesisUtterance' in window;
+
+  let preferredVoice = null;
+  let initialized = false;
+
+  const pickVoice = () => {
+    if (!supported) return;
+    const voices = window.speechSynthesis.getVoices();
+    if (!voices || voices.length === 0) return;
+
+    const preferredLocales = ['de', 'en'];
+    preferredVoice = voices.find(voice =>
+      preferredLocales.some(locale => voice.lang.toLowerCase().startsWith(locale))
+    ) || voices.find(voice => voice.default) || voices[0];
+  };
+
+  const init = () => {
+    if (!supported || initialized) return;
+    initialized = true;
+    pickVoice();
+    window.speechSynthesis.addEventListener('voiceschanged', pickVoice);
+  };
+
+  const speak = (text) => {
+    if (!supported || !text) return;
+    pickVoice();
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    if (preferredVoice) {
+      utterance.voice = preferredVoice;
+    }
+    utterance.rate = 0.95;
+    utterance.pitch = 0.85;
+    window.speechSynthesis.speak(utterance);
+  };
+
+  const stop = () => {
+    if (!supported) return;
+    window.speechSynthesis.cancel();
+  };
+
+  return { init, speak, stop, supported };
+})();
+
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
   console.log('DOM loaded, setting up event listeners...');
   setupEventListeners();
+  speechSynth.init();
 });
 
 function setupEventListeners() {
@@ -480,6 +529,11 @@ function addMessageToChat(role, content, sources = null, audioUrl = null) {
     messageDiv.appendChild(playButton);
   }
 
+  // Auto-speak Ego responses when speech synthesis is available
+  if (role === 'ego' && speechSynth.supported) {
+    speechSynth.speak(content);
+  }
+
   // Add sources if available (RAG responses)
   if (sources && sources.length > 0) {
     const sourcesDiv = document.createElement('div');
@@ -500,6 +554,7 @@ function addMessageToChat(role, content, sources = null, audioUrl = null) {
 }
 
 function playAudio(audioUrl) {
+  speechSynth.stop();
   const audioPlayer = document.getElementById('audio-player');
   audioPlayer.src = audioUrl;
   audioPlayer.play();
