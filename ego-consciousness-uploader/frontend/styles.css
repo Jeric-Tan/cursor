@@ -32,6 +32,18 @@ body {
   color: #333;
 }
 
+/* Subtle animated glow overlay */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(600px 600px at 20% 20%, rgba(102, 126, 234, 0.15), transparent 60%),
+    radial-gradient(700px 700px at 80% 30%, rgba(118, 75, 162, 0.12), transparent 60%);
+  animation: hueShift 20s ease-in-out infinite alternate;
+}
+
 #app {
   position: relative;
   background: transparent;
@@ -107,6 +119,11 @@ body {
   display: none;
 }
 
+/* Animate stage entry */
+.stage.active {
+  animation: fadeUp 300ms ease-out both;
+}
+
 h1 {
   color: #ffffff;
   margin-bottom: 0.1rem;
@@ -118,6 +135,7 @@ h1 {
   text-shadow:
     0 8px 32px rgba(31, 38, 135, 0.2),
     0 2px 16px rgba(31, 38, 135, 0.1);
+  animation: fadeUp 800ms ease-out both;
 }
 
 /* Responsive sizes to approximate sm:text-8xl and lg:text-9xl */
@@ -142,6 +160,7 @@ h2 {
   margin-bottom: 0.75rem;
   font-size: 1.1rem;
   font-weight: 400;
+  animation: fadeUp 900ms ease-out both;
 }
 
 input[type="text"] {
@@ -177,16 +196,23 @@ button {
   font-size: 1rem;
   cursor: pointer;
   margin: 0.5rem;
-  transition: background 0.3s;
+  transition: background 0.3s, transform 0.15s ease-out, box-shadow 0.2s ease-out;
 }
 
 button:hover:not(:disabled) {
   background: #5568d3;
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(31, 38, 135, 0.18);
 }
 
 button:disabled {
   background: #ccc;
   cursor: not-allowed;
+}
+
+button:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(31, 38, 135, 0.15);
 }
 
 #question-display {
@@ -196,6 +222,7 @@ button:disabled {
   margin: 1rem 0;
   font-size: 1.1rem;
   text-align: center;
+  animation: fadeUp 250ms ease-out both;
 }
 
 #timer {
@@ -218,6 +245,27 @@ button:disabled {
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
+}
+
+/* Additional animation keyframes */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes hueShift {
+  from { filter: hue-rotate(0deg) saturate(1); }
+  to { filter: hue-rotate(20deg) saturate(1.1); }
 }
 
 #loading-message {
@@ -247,11 +295,13 @@ button:disabled {
   color: white;
   margin-left: auto;
   text-align: right;
+  animation: slideInRight 250ms ease-out both;
 }
 
 .message.ego {
   background: #f0f0f0;
   color: #333;
+  animation: slideInLeft 250ms ease-out both;
 }
 
 #chat-input-container {
@@ -497,6 +547,14 @@ button:disabled {
   margin-top: 2rem;
   padding-top: 2rem;
   border-top: 2px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Respect reduced-motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
+  }
 }
 
 #recording-status {
