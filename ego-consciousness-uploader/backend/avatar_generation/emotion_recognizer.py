@@ -354,16 +354,24 @@ class EmotionRecognizer:
         self.is_running = True
         
         try:
-            # Start WebSocket server
+            # Start WebSocket server with port reuse
             logger.info(f"Starting WebSocket server on {self.host}:{self.port}")
             
-            async with websockets.serve(self.handle_client, self.host, self.port):
-                logger.info("WebSocket server started!")
-                logger.info("Waiting for client connections...")
-                
-                # Run forever
-                await asyncio.Future()
-                
+            # Create server with reuse port option
+            start_server = websockets.serve(
+                self.handle_client, 
+                self.host, 
+                self.port,
+                reuse_port=True  # Allow port reuse
+            )
+            
+            server = await start_server
+            logger.info("WebSocket server started!")
+            logger.info("Waiting for client connections...")
+            
+            # Run forever
+            await asyncio.Future()
+            
         except KeyboardInterrupt:
             logger.info("Shutting down...")
         except Exception as e:

@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat with Your Ego</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+</head>
+<body>
+    <h1>Ego</h1>
+    <p class="subtext">chat with yourself.</p>
+    
+    <div id="chat-container">
+        <div id="avatar-column">
+            <img id="avatar-display" src="" alt="Your Ego" />
+        </div>
+        <div id="chat-column">
+            <div id="chat-messages"></div>
+            <div id="chat-input-container">
+                <input type="text" id="chat-input" placeholder="Type a message..." />
+                <button id="send-btn">Send</button>
+            </div>
+        </div>
+    </div>
+    
+    <audio id="audio-player" controls style="display: none;"></audio>
+
+    <script type="module">
+        // Simple chat functionality
+        const API_BASE_URL = 'http://localhost:3001';
+        let sessionId = null;
+        let avatarGifs = {};
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', async () => {
+            console.log('Chat page loaded');
+            await initializeChat();
+            setupEventListeners();
+        });
+
+        async function initializeChat() {
+            try {
+                // Get session ID from URL params or localStorage
+                const urlParams = new URLSearchParams(window.location.search);
+                sessionId = urlParams.get('sessionId');
+                
+                if (!sessionId) {
+                    // Try to get the latest session with avatars
+                    try {
+                        const response = await fetch(`${API_BASE_URL}/api/latest-session`);
+                        if (response.ok) {
+                            const data = await response.json();
+                            sessionId = data.sessionId;
+                        }
+                    } catch (error) {
+                        console.log('Could not get latest session, trying known sessions...');
+                    }
+                    
+                    // Fallback to known sessions with avatars
+                    if (!sessionId) {
+                        const knownSessions = [
+                            'mock-session-1760805471452',
+                            'mock-session-1760804443527',
+                            'mock-session-1760803680624',
+                            'mock-session-1760802804217',
+                            'mock-session-1760802047725',
+                            'mock-session-1760801721672'
+                        ];
+                        
+                        for (const testSession of knownSessions) {
+                            try {
+                                const status = await fetch(`${API_BASE_URL}/api/avatar-status?sessionId=${testSession}`);
+                                if (status.ok) {
+                                    const data = await status.json();
+                                    if (data.status === 'complete' && data.gifPaths && Object.keys(data.gifPaths).length > 0) {
+                                        sessionId = testSession;
+                                        break;
+                                    }
+                                }
+                            } catch (e) {
+                                // Continue to next session
+                            }
+                        }
+                    }
+                }
+                
+                if (!sessionId) {
+                    console.error('No session found with avatars');
+                    document.getElementById('avatar-display').textContent = 'No Avatar Available';
+                    return;
+                }
+                
+                console.log('Using session:', sessionId);
+                
+                // Fetch avatar status
+                const response = await fetch(`${API_BASE_URL}/api/avatar-status?sessionId=${sessionId}`);
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('Avatar status:', data);
+                    
+                    if (data.status === 'complete' && data.gifPaths) {
+                        // Convert relative URLs to full URLs
+                        avatarGifs = {};
+                        for (const [emotion, url] of Object.entries(data.gifPaths)) {
+                            avatarGifs[emotion] = url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
+                        }
+                        console.log('Avatar GIFs loaded:', avatarGifs);
+                        
+                        // Set neutral avatar as default
+                        setAvatar('neutral');
+                    } else {
+                        console.warn('Avatar generation not complete');
+                        document.getElementById('avatar-display').textContent = 'Generating Avatar...';
+                    }
+                } else {
+                    console.error('Failed to fetch avatar status');
+                    document.getElementById('avatar-display').textContent = 'Avatar Not Available';
+                }
+                
+            } catch (error) {
+                console.error('Error initializing chat:', error);
+                document.getElementById('avatar-display').textContent = 'Error Loading Avatar';
+            }
+        }
+
+        function setAvatar(emotion) {
+            const avatarDisplay = document.getElementById('avatar-display');
+            const gifUrl = avatarGifs[emotion];
+            
+            if (gifUrl) {
+                avatarDisplay.src = gifUrl;
+                avatarDisplay.alt = `${emotion} avatar`;
+                console.log(`Set avatar to ${emotion}:`, gifUrl);
+            } else {
+                console.warn(`No GIF found for emotion: ${emotion}`);
+                // Try to use any available emotion
+                const availableEmotions = Object.keys(avatarGifs);
+                if (availableEmotions.length > 0) {
+                    setAvatar(availableEmotions[0]);
+                }
+            }
+        }
+
+        function setupEventListeners() {
+            const sendBtn = document.getElementById('send-btn');
+            const chatInput = document.getElementById('chat-input');
+
+            if (sendBtn) {
+                sendBtn.addEventListener('click', sendMessage);
+            }
+
+            if (chatInput) {
+                chatInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        sendMessage();
+                    }
+                });
+            }
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('chat-input');
+            const message = input.value.trim();
+
+            if (!message || !sessionId) return;
+
+            // Add user message to UI
+            addMessageToChat('user', message);
+            input.value = '';
+
+            try {
+                // Send to backend
+                const response = await fetch(`${API_BASE_URL}/api/chat`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        sessionId, 
+                        message, 
+                        useRAG: true 
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to send message');
+                }
+
+                const data = await response.json();
+
+                // Add Ego response to UI
+                addMessageToChat('ego', data.textResponse, data.sources);
+
+                // Play audio response
+                if (data.audioUrl) {
+                    playAudio(data.audioUrl);
+                }
+
+                // Change avatar randomly for ego responses
+                const emotions = Object.keys(avatarGifs);
+                if (emotions.length > 0) {
+                    const randomEmotion = emotions[Math.floor(Math.random() * emotions.length)];
+                    setAvatar(randomEmotion);
+                }
+
+            } catch (error) {
+                console.error('Error sending message:', error);
+                addMessageToChat('system', 'Error: ' + error.message);
+            }
+        }
+
+        function addMessageToChat(role, content, sources = null) {
+            const messagesContainer = document.getElementById('chat-messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${role}`;
+
+            // Add message content
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            contentDiv.textContent = content;
+            messageDiv.appendChild(contentDiv);
+
+            // Add sources if available (RAG responses)
+            if (sources && sources.length > 0) {
+                const sourcesDiv = document.createElement('div');
+                sourcesDiv.className = 'message-sources';
+                sourcesDiv.innerHTML = '<details><summary>📚 Sources</summary><ul>' +
+                    sources.slice(0, 3).map((source, i) =>
+                        `<li>
+                            <strong>${source.metadata.topic || 'Context'}</strong> (${Math.round(source.score * 100)}% match)<br>
+                            <small>${source.metadata.url || ''}</small>
+                        </li>`
+                    ).join('') +
+                    '</ul></details>';
+                messageDiv.appendChild(sourcesDiv);
+            }
+
+            messagesContainer.appendChild(messageDiv);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+
+        function playAudio(audioUrl) {
+            const audioPlayer = document.getElementById('audio-player');
+            audioPlayer.src = audioUrl;
+            audioPlayer.play();
+        }
+    </script>
+</body>
+</html>

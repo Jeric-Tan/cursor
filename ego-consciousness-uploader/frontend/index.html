@@ -41,7 +41,15 @@
                 </div>
             </div>
             <div id="camera-controls">
+                <div id="ai-mode-toggle">
+                    <label>
+                        <input type="checkbox" id="ai-assisted-mode" checked>
+                        AI-assisted capture
+                    </label>
+                    <span id="emotion-status" style="margin-left: 1rem; font-size: 0.8rem; color: #9ca3af;">Disconnected</span>
+                </div>
                 <button id="capture-photo-btn">Capture Photo</button>
+                <button id="manual-capture-btn" style="display: none;">Having trouble? Capture manually</button>
             </div>
 
             <!-- Voice Recording Section (shown after photos) -->
@@ -63,17 +71,30 @@
         </div>
 
         <!-- Stage 4: Chat -->
-        <div id="chat-stage" class="stage hidden">
+        <div id="chat-stage" class="stage active">
             <h2>Chat with Your Ego</h2>
-            <div id="chat-messages"></div>
-            <div id="chat-input-container">
-                <input type="text" id="chat-input" placeholder="Type a message..." />
-                <button id="send-btn">Send</button>
+            <div id="chat-container">
+                <div id="avatar-column">
+                    <img id="avatar-display" src="" alt="Your Ego" />
+                </div>
+                <div id="chat-column">
+                    <div id="chat-messages"></div>
+                    <div id="chat-input-container">
+                        <input type="text" id="chat-input" placeholder="Type a message..." />
+                        <button id="send-btn">Send</button>
+                    </div>
+                </div>
             </div>
             <audio id="audio-player" controls style="display: none;"></audio>
+            <div style="margin-top: 20px; text-align: center;">
+                <a href="chat.html" style="color: #666; text-decoration: none; font-size: 0.9rem;">
+                    → Open dedicated chat page
+                </a>
+            </div>
         </div>
     </div>
 
+    <script src="emotion-capture.js"></script>
     <script type="module" src="app.js"></script>
 </body>
 </html>

@@ -1,5 +1,6 @@
 // JAKE/ZHENGFENG: API route handlers
 
+import fs from 'fs';
 import {
   createProfile,
   getProfile,
@@ -15,15 +16,18 @@ import { simulateSmitheryWebhook } from "./mock-data.js";
 import { ConsciousnessScraper, validateConfig } from "./scraper/index.js";
 import { saveScrapedSnapshot } from "./storage/scraped-store.js";
 import { initRAG } from "./rag/index.js";
-import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { spawn } from 'child_process';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const ENABLE_MCP_SCRAPER = process.env.ENABLE_MCP_SCRAPER !== "false";
 let hasLoggedScraperConfig = false;
+
+// Avatar generation status tracking
+const avatarStatus = new Map(); // sessionId -> { status: 'pending'|'processing'|'complete'|'failed', gifPaths: {} }
 
 async function applyScrapedData(
   sessionId,
@@ -64,6 +68,105 @@ async function triggerScraper(sessionId, fullName) {
   const scraper = new ConsciousnessScraper();
   const scrapedData = await scraper.scrape({ name: fullName, limit: 30 });
   await applyScrapedData(sessionId, scrapedData, "SCRAPER", { fullName });
+}
+
+async function triggerAvatarGeneration(sessionId) {
+  try {
+    console.log(`[AVATAR] Starting avatar generation for session ${sessionId}`);
+    
+    // Set status to processing
+    avatarStatus.set(sessionId, {
+      status: 'processing',
+      gifPaths: {}
+    });
+    
+    // Get the path to the avatar runner
+    const avatarRunnerPath = path.join(__dirname, 'avatar_generation', 'avatar_runner.py');
+    
+    // Spawn the Python process using virtual environment
+    const venvPython = path.join(__dirname, '..', 'venv', 'bin', 'python3');
+    const pythonProcess = spawn(venvPython, [avatarRunnerPath, sessionId], {
+      cwd: path.join(__dirname, 'avatar_generation'),
+      stdio: ['pipe', 'pipe', 'pipe']
+    });
+    
+    let output = '';
+    let errorOutput = '';
+    
+    pythonProcess.stdout.on('data', (data) => {
+      output += data.toString();
+    });
+    
+    pythonProcess.stderr.on('data', (data) => {
+      errorOutput += data.toString();
+    });
+    
+    pythonProcess.on('close', (code) => {
+      try {
+        // Extract JSON from the output (it's at the end after all the logging)
+        const lines = output.split('\n');
+        let jsonLine = null;
+        
+        // Find the last line that looks like JSON (starts with { and ends with })
+        for (let i = lines.length - 1; i >= 0; i--) {
+          const line = lines[i].trim();
+          if (line.startsWith('{') && line.endsWith('}')) {
+            jsonLine = line;
+            break;
+          }
+        }
+        
+        if (!jsonLine) {
+          throw new Error('No JSON found in output');
+        }
+        
+        console.log(`[AVATAR] Extracted JSON:`, jsonLine);
+        const result = JSON.parse(jsonLine);
+        
+        if (result.success) {
+          console.log(`[AVATAR] Avatar generation completed for session ${sessionId}`);
+          console.log(`[AVATAR] GIF paths received:`, result.gifs);
+          avatarStatus.set(sessionId, {
+            status: 'complete',
+            gifPaths: result.gifs || {}
+          });
+        } else {
+          console.error(`[AVATAR] Avatar generation failed for session ${sessionId}:`, result.error);
+          avatarStatus.set(sessionId, {
+            status: 'failed',
+            gifPaths: {},
+            error: result.error
+          });
+        }
+      } catch (parseError) {
+        console.error(`[AVATAR] Failed to parse avatar generation result:`, parseError);
+        console.error(`[AVATAR] Output:`, output);
+        console.error(`[AVATAR] Error:`, errorOutput);
+        avatarStatus.set(sessionId, {
+          status: 'failed',
+          gifPaths: {},
+          error: 'Failed to parse generation result'
+        });
+      }
+    });
+    
+    pythonProcess.on('error', (error) => {
+      console.error(`[AVATAR] Failed to start avatar generation process:`, error);
+      avatarStatus.set(sessionId, {
+        status: 'failed',
+        gifPaths: {},
+        error: error.message
+      });
+    });
+    
+  } catch (error) {
+    console.error(`[AVATAR] Error triggering avatar generation:`, error);
+    avatarStatus.set(sessionId, {
+      status: 'failed',
+      gifPaths: {},
+      error: error.message
+    });
+  }
 }
 
 // POST /api/start
@@ -241,6 +344,11 @@ export async function handleUploadVoice(req, res) {
       console.warn("Supabase/ElevenLabs upload skipped:", uploadError.message);
     }
 
+    // Trigger avatar generation asynchronously
+    triggerAvatarGeneration(sessionId).catch(error => {
+      console.error(`[AVATAR] Error in avatar generation trigger:`, error);
+    });
+
     res.json({
       success: true,
       voiceId,
@@ -341,6 +449,185 @@ export async function handleChat(req, res) {
   } catch (error) {
     console.error("Error in handleChat:", error);
     res.status(500).json({ error: "Failed to process chat message" });
+  }
+}
+
+// GET /api/avatar-status
+export async function handleGetAvatarStatus(req, res) {
+  try {
+    const { sessionId } = req.query;
+
+    if (!sessionId) {
+      return res.status(400).json({ error: "Session ID is required" });
+    }
+
+    // Check if we have a cached status
+    let status = avatarStatus.get(sessionId);
+    
+    // If no cached status or status is pending, check the file system
+    if (!status || status.status === 'pending') {
+      const gifsDir = path.join(__dirname, '..', 'data', 'avatars', sessionId, 'gifs');
+      
+      if (fs.existsSync(gifsDir)) {
+        const gifFiles = fs.readdirSync(gifsDir).filter(file => file.endsWith('.gif'));
+        
+        if (gifFiles.length > 0) {
+          // Build gifPaths object from existing files
+          const gifPaths = {};
+          gifFiles.forEach(file => {
+            const emotion = file.replace('_animation.gif', '');
+            gifPaths[emotion] = `/api/avatars/${sessionId}/${file}`;
+          });
+          
+          status = {
+            status: 'complete',
+            gifPaths: gifPaths
+          };
+          
+          // Cache the status
+          avatarStatus.set(sessionId, status);
+          console.log(`[AVATAR] Found existing GIFs for session ${sessionId}:`, gifPaths);
+        } else {
+          status = {
+            status: 'pending',
+            gifPaths: {}
+          };
+        }
+      } else {
+        status = {
+          status: 'pending',
+          gifPaths: {}
+        };
+      }
+    }
+
+    res.json(status);
+  } catch (error) {
+    console.error("Error in handleGetAvatarStatus:", error);
+    res.status(500).json({ error: "Failed to get avatar status" });
+  }
+}
+
+// POST /api/set-avatar-status (temporary endpoint for testing)
+export async function handleSetAvatarStatus(req, res) {
+  try {
+    const { sessionId, status, gifPaths } = req.body;
+    
+    if (!sessionId) {
+      return res.status(400).json({ error: "Session ID required" });
+    }
+    
+    avatarStatus.set(sessionId, {
+      status: status || 'complete',
+      gifPaths: gifPaths || {
+        neutral: '/api/avatars/mock-session-1760796792066/neutral_animation.gif',
+        sad: '/api/avatars/mock-session-1760796792066/sad_animation.gif',
+        angry: '/api/avatars/mock-session-1760796792066/angry_animation.gif'
+      }
+    });
+    
+    res.json({ success: true, message: 'Avatar status updated' });
+    
+  } catch (error) {
+    console.error("Error in handleSetAvatarStatus:", error);
+    res.status(500).json({ error: "Failed to set avatar status" });
+  }
+}
+
+// GET /api/latest-session (get latest session with avatars)
+export async function handleGetLatestSession(req, res) {
+  try {
+    
+    // Look for the most recent session with avatars
+    const avatarsDir = path.join(__dirname, '..', 'data', 'avatars');
+    
+    if (!fs.existsSync(avatarsDir)) {
+      return res.json({ sessionId: null, message: 'No avatars directory found' });
+    }
+    
+    const sessions = fs.readdirSync(avatarsDir)
+      .filter(session => {
+        const sessionPath = path.join(avatarsDir, session);
+        const gifsPath = path.join(sessionPath, 'gifs');
+        return fs.existsSync(gifsPath) && fs.readdirSync(gifsPath).length > 0;
+      })
+      .sort()
+      .reverse(); // Most recent first
+    
+    if (sessions.length === 0) {
+      return res.json({ sessionId: null, message: 'No sessions with avatars found' });
+    }
+    
+    const latestSession = sessions[0];
+    res.json({ 
+      sessionId: latestSession,
+      message: 'Latest session with avatars found'
+    });
+    
+  } catch (error) {
+    console.error("Error in handleGetLatestSession:", error);
+    res.status(500).json({ error: "Failed to get latest session" });
+  }
+}
+
+// GET /api/scan-sessions (get all sessions with avatars)
+export async function handleScanSessions(req, res) {
+  try {
+    
+    // Look for all sessions with avatars
+    const avatarsDir = path.join(__dirname, '..', 'data', 'avatars');
+    
+    if (!fs.existsSync(avatarsDir)) {
+      return res.json({ sessions: [], message: 'No avatars directory found' });
+    }
+    
+    const sessions = fs.readdirSync(avatarsDir)
+      .filter(session => {
+        const sessionPath = path.join(avatarsDir, session);
+        const gifsPath = path.join(sessionPath, 'gifs');
+        return fs.existsSync(gifsPath) && fs.readdirSync(gifsPath).length > 0;
+      })
+      .sort()
+      .reverse(); // Most recent first
+    
+    res.json({ 
+      sessions: sessions,
+      message: `Found ${sessions.length} sessions with avatars`
+    });
+    
+  } catch (error) {
+    console.error("Error in handleScanSessions:", error);
+    res.status(500).json({ error: "Failed to scan sessions" });
+  }
+}
+
+// GET /api/avatars/:sessionId/:filename (serve avatar files)
+export async function handleGetAvatar(req, res) {
+  try {
+    const { sessionId, filename } = req.params;
+    
+    if (!sessionId || !filename) {
+      return res.status(400).json({ error: "Session ID and filename required" });
+    }
+    
+    // Construct file path
+    const filePath = path.join(__dirname, '..', 'data', 'avatars', sessionId, 'gifs', filename);
+    
+    // Check if file exists
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: "Avatar file not found" });
+    }
+    
+    // Set appropriate headers
+    res.setHeader('Content-Type', 'image/gif');
+    res.setHeader('Cache-Control', 'public, max-age=3600'); // Cache for 1 hour
+    
+    // Send file
+    res.sendFile(filePath);
+    
+  } catch (error) {
+    console.error("Error in handleGetAvatar:", error);
+    res.status(500).json({ error: "Failed to serve avatar file" });
   }
 }
 

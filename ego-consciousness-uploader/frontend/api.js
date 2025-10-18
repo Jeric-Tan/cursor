@@ -83,5 +83,25 @@ export const api = {
     }
 
     return await response.json();
+  },
+
+  async getAvatarStatus(sessionId) {
+    const response = await fetch(`${API_BASE_URL}/api/avatar-status?sessionId=${sessionId}`);
+
+    if (!response.ok) {
+      throw new Error('Failed to get avatar status');
+    }
+
+    return await response.json();
+  },
+
+  async getLatestSessionWithAvatars() {
+    const response = await fetch(`${API_BASE_URL}/api/latest-session`);
+
+    if (!response.ok) {
+      throw new Error('Failed to get latest session');
+    }
+
+    return await response.json();
   }
 };

@@ -333,7 +333,7 @@ def main():
             puppeteer = AvatarPuppeteer(GEMINI_API_KEY)
             variations = puppeteer.generate_all_emotion_variations(
                 generated_avatars, 
-                num_variations=4,
+                num_variations=2,
                 output_dir="stop_motion"
             )
             
