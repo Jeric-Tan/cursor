@@ -81,7 +81,33 @@ Open `http://localhost:3001` in your browser.
 
 ## 🎭 Emotion Recognition (New Feature!)
 
-### Quick Test
+### Emotion Capture Calibration (NEW!)
+
+Capture high-quality face images for user calibration:
+
+```bash
+# Option 1: Using the test script (recommended)
+python test_emotion_capture.py
+
+# Option 2: Using the shell script
+./scripts/run_emotion_capture.sh
+
+# Option 3: Direct module invocation
+python backend/emotion_recognizer.py capture
+```
+
+**What it does:**
+- 📸 Guides you through capturing 4 distinct emotions: neutral, happy, sad, angry
+- ✅ Uses stability checking (15 consecutive frames) for clear expressions
+- 💾 Saves high-quality PNG images of your face for each emotion
+- 🎯 Color-coded visual feedback (green = correct emotion detected)
+- 📊 Real-time progress tracking with progress bar
+
+See `EMOTION_CAPTURE_GUIDE.md` for complete documentation.
+
+---
+
+### Real-Time Emotion Detection
 
 Test the emotion recognition system standalone:
 
@@ -114,8 +140,10 @@ The emotion recognition stage appears after voice recording, before chat.
 - ✅ Live camera feed with face detection bounding boxes
 - ✅ Dynamic confidence scores
 - ✅ WebSocket real-time streaming
+- ✅ **NEW**: Guided emotion capture calibration module
 
 ### Documentation
+- **Emotion Capture**: See `EMOTION_CAPTURE_GUIDE.md` 🆕
 - **Complete Guide**: See `REAL_EMOTION_DETECTION_GUIDE.md`
 - **Setup Verification**: Run `python3 verify_setup.py`
 - **Before/After Comparison**: See `BEFORE_VS_AFTER.md`
