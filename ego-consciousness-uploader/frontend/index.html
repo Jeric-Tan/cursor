@@ -1,22 +1,28 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
+  <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ego - Consciousness Uploader</title>
     <link rel="stylesheet" href="styles.css">
-</head>
-
-<body>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+    <link rel="preload" href="fonts/cy-grotesk-key-2.ttf" as="font" type="font/ttf" crossorigin>
+  </head>
+  <body>
+    <h1>Ego</h1>
+    <!-- <p class="subtext">upload yourself.</p> -->
     <div id="app">
-        <!-- JAKE/ZHENGFENG: Add your UI here -->
+      <!-- JAKE/ZHENGFENG: Add your UI here -->
 
         <!-- Stage 1: Name Input -->
         <div id="name-input-stage" class="stage active">
-            <h1>Create Your Digital Ego</h1>
-            <input type="text" id="name-input" placeholder="Enter your full name" />
-            <button id="start-btn">Begin</button>
+            <input type="text" id="name-input" placeholder="Your full name." />
         </div>
+        <p class="subtext">upload yourself.</p>
+
 
         <!-- Stage 2: Voice Recording -->
         <div id="voice-recording-stage" class="stage hidden">
