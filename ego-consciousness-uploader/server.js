@@ -22,6 +22,8 @@ import {
   handleScanSessions,
   handleVoiceQuestion
 } from './backend/api-endpoints.js';
+import { handleCreateCalendarEvent, handleListCalendarEvents } from './backend/integrations/calendar.js';
+import { handleLinkedInPost } from './backend/integrations/linkedin.js';
 
 // Load environment variables
 dotenv.config();
@@ -128,6 +130,11 @@ app.post('/api/set-avatar-status', handleSetAvatarStatus);
 app.post('/api/chat', handleChat);
 app.post('/api/voice-question', handleVoiceQuestion);
 app.post('/api/webhook', handleWebhook);
+
+// Integrations via Smithery MCP
+app.post('/api/calendar/create', handleCreateCalendarEvent);
+app.get('/api/calendar/list', handleListCalendarEvents);
+app.post('/api/linkedin/post', handleLinkedInPost);
 
 // Serve index.html for all other routes (SPA) - but exclude API routes and static files
 app.get('*', (req, res, next) => {

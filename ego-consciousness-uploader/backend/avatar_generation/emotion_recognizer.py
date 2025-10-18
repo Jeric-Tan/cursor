@@ -357,12 +357,11 @@ class EmotionRecognizer:
             # Start WebSocket server with port reuse
             logger.info(f"Starting WebSocket server on {self.host}:{self.port}")
             
-            # Create server with reuse port option
+            # Create server (avoid reuse_port for cross-platform compatibility)
             start_server = websockets.serve(
-                self.handle_client, 
-                self.host, 
-                self.port,
-                reuse_port=True  # Allow port reuse
+                self.handle_client,
+                self.host,
+                self.port
             )
             
             server = await start_server
