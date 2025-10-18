@@ -1,5 +1,6 @@
 import { ExaMCPClient } from './mcp-client.js';
 import { ContentExtractor } from './extractor.js';
+import { enrichScrapedContent } from './enricher.js';
 
 const COMMON_ENGLISH_WORDS = [
   'the',
@@ -122,6 +123,8 @@ export class ConsciousnessScraper {
     }
 
     await this.mcpClient.disconnect();
+
+    await enrichScrapedContent(this.personName, scrapedContent);
 
     const allContentItems = scrapedContent.flatMap((s) => s.content_items);
 

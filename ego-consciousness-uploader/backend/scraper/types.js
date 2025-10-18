@@ -5,6 +5,11 @@
  * @property {string} topic
  * @property {string} sentiment
  * @property {string|null} date
+ * @property {string|null=} belief_expressed
+ * @property {string|null=} speaking_style
+ * @property {string|null=} knowledge_domain
+ * @property {string[]=} people_mentioned
+ * @property {string|null=} response_pattern
  */
 
 /**
