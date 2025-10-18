@@ -31,16 +31,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function setupEventListeners() {
   console.log('Setting up event listeners...');
-  
-  // TODO: Add event listeners for all buttons
+
+  // Name input stage
   const startBtn = document.getElementById('start-btn');
+  const nameInput = document.getElementById('name-input');
+
+  // Voice recording stage
   const recordBtn = document.getElementById('record-btn');
   const stopBtn = document.getElementById('stop-btn');
+
+  // Emotion recognition stage
+  const startCameraBtn = document.getElementById('start-camera-btn');
+  const stopCameraBtn = document.getElementById('stop-camera-btn');
+  const continueToChatBtn = document.getElementById('continue-to-chat-btn');
+
+  // Chat stage
   const sendBtn = document.getElementById('send-btn');
-  const nameInput = document.getElementById('name-input');
-  
-  console.log('Found buttons:', { startBtn, recordBtn, stopBtn, sendBtn });
-  
+  const chatInput = document.getElementById('chat-input');
+
+  console.log('Found buttons:', {
+    startBtn, recordBtn, stopBtn, sendBtn,
+    startCameraBtn, stopCameraBtn, continueToChatBtn
+  });
+
   if (startBtn) {
     startBtn.addEventListener('click', handleNameSubmit);
     console.log('Start button listener added');
@@ -54,20 +67,45 @@ function setupEventListeners() {
     });
     console.log('Name input Enter-to-start enabled');
   }
-  
+
   if (recordBtn) {
     recordBtn.addEventListener('click', startRecording);
     console.log('Record button listener added');
   }
-  
+
   if (stopBtn) {
     stopBtn.addEventListener('click', stopRecording);
     console.log('Stop button listener added');
   }
-  
+
+  if (startCameraBtn) {
+    startCameraBtn.addEventListener('click', startEmotionDetection);
+    console.log('Start camera button listener added');
+  }
+
+  if (stopCameraBtn) {
+    stopCameraBtn.addEventListener('click', stopEmotionDetection);
+    console.log('Stop camera button listener added');
+  }
+
+  if (continueToChatBtn) {
+    continueToChatBtn.addEventListener('click', continueToChat);
+    console.log('Continue to chat button listener added');
+  }
+
   if (sendBtn) {
     sendBtn.addEventListener('click', sendMessage);
     console.log('Send button listener added');
+  }
+
+  if (chatInput) {
+    chatInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+    console.log('Chat input Enter-to-send enabled');
   }
 }
 
@@ -159,7 +197,14 @@ async function uploadVoice(audioBlob) {
     // TODO: Poll for completion
     await pollForCompletion();
 
+    // Enable continue button immediately when stage loads
     switchStage(STAGES.EMOTION_RECOGNITION);
+
+    // Make continue button available right away
+    const continueBtn = document.getElementById('continue-to-chat-btn');
+    if (continueBtn) {
+      continueBtn.disabled = false;
+    }
   } catch (error) {
     alert('Error uploading voice: ' + error.message);
   }

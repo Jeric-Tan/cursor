@@ -14,8 +14,10 @@ import { createPersonalityPrompt } from "./prompt-generator.js";
 import { simulateSmitheryWebhook } from "./mock-data.js";
 import { ConsciousnessScraper, validateConfig } from "./scraper/index.js";
 import { saveScrapedSnapshot } from "./storage/scraped-store.js";
+import { initRAG } from "./rag/index.js";
 
 const ENABLE_MCP_SCRAPER = process.env.ENABLE_MCP_SCRAPER !== "false";
+const ENABLE_RAG = process.env.ENABLE_RAG !== "false"; // default: enabled
 let hasLoggedScraperConfig = false;
 
 async function applyScrapedData(
@@ -168,7 +170,7 @@ export async function handleGetStatus(req, res) {
 // POST /api/chat
 export async function handleChat(req, res) {
   try {
-    const { sessionId, message } = req.body;
+    const { sessionId, message, useRAG = true } = req.body;
 
     if (!sessionId || !message) {
       return res
@@ -183,10 +185,42 @@ export async function handleChat(req, res) {
     // Save user message
     await saveMessage(sessionId, "user", message);
 
-    // Generate response using LLM (Jeric/Jasper's code)
-    const systemPrompt =
-      profile.master_prompt || "You are a helpful AI assistant.";
-    const textResponse = await generateResponse(systemPrompt, history, message);
+    let textResponse;
+    let sources = null;
+
+    // Respect global flag and request flag
+    const wantRAG = ENABLE_RAG && useRAG;
+    if (wantRAG && profile.is_ego_ready) {
+      // Use RAG for context-aware responses
+      try {
+        console.log('[RAG] Initializing RAG for session:', sessionId);
+        const rag = await initRAG(sessionId);
+
+        // Convert conversation history to the format RAG expects
+        const conversationHistory = history.map(msg => ({
+          role: msg.role,
+          content: msg.content,
+        }));
+
+        console.log('[RAG] Querying with message:', message);
+        const result = await rag.query(message, {
+          topK: 5,
+          conversationHistory,
+        });
+        textResponse = result.answer;
+        sources = result.sources;
+        console.log('[RAG] Response generated with', sources.length, 'sources');
+      } catch (ragError) {
+        console.warn("[RAG] Query failed, falling back to standard LLM:", ragError);
+        const systemPrompt = profile.master_prompt || "You are a helpful AI assistant.";
+        textResponse = await generateResponse(systemPrompt, history, message);
+      }
+    } else {
+      // Fallback to standard LLM
+      console.log('[LLM] Using standard LLM (RAG disabled or ego not ready)');
+      const systemPrompt = profile.master_prompt || "You are a helpful AI assistant.";
+      textResponse = await generateResponse(systemPrompt, history, message);
+    }
 
     // Generate audio using ElevenLabs (Jeric/Jasper's code)
     const audioUrl = await textToSpeech(
@@ -200,6 +234,7 @@ export async function handleChat(req, res) {
     res.json({
       textResponse,
       audioUrl,
+      sources, // Include sources for RAG responses
     });
   } catch (error) {
     console.error("Error in handleChat:", error);
