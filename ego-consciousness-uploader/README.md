@@ -1,8 +1,4 @@
-# Ego: Consciousness Uploader
-
-Create a digital clone of yourself that talks, thinks, and sounds like you.
-
-**NEW: 🎭 Real-time Emotion Recognition** - Now with AI-powered facial emotion detection!
+# Ego
 
 ## Quick Start
 
@@ -32,7 +28,7 @@ For future sessions, you can use the following scripts:
     ./start.sh
     ```
 
-*   **To stop the application:**
+*   **To stop the application / kill existing processes:**
     ```bash
     ./kill.sh
     ```
