@@ -4,6 +4,7 @@ export const STAGES = {
   NAME_INPUT: 'name-input',
   VOICE_RECORDING: 'voice-recording',
   PROCESSING: 'processing',
+  EMOTION_RECOGNITION: 'emotion-recognition',
   CHAT: 'chat'
 };
 

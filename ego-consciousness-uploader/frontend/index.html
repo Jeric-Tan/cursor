@@ -40,7 +40,25 @@
             <div class="spinner"></div>
         </div>
 
-        <!-- Stage 4: Chat -->
+        <!-- Stage 4: Emotion Recognition -->
+        <div id="emotion-recognition-stage" class="stage hidden">
+            <h2>Emotion Recognition</h2>
+            <div id="camera-container">
+                <video id="camera-feed" autoplay muted style="display: none;"></video>
+                <canvas id="emotion-canvas"></canvas>
+            </div>
+            <div id="emotion-display">
+                <div id="current-emotion">No emotion detected</div>
+                <div id="emotion-confidence">Confidence: 0%</div>
+            </div>
+            <div id="emotion-controls">
+                <button id="start-camera-btn">Start Camera</button>
+                <button id="stop-camera-btn" disabled>Stop Camera</button>
+                <button id="continue-to-chat-btn" disabled>Continue to Chat</button>
+            </div>
+        </div>
+
+        <!-- Stage 5: Chat -->
         <div id="chat-stage" class="stage hidden">
             <h2>Chat with Your Ego</h2>
             <div id="chat-messages"></div>

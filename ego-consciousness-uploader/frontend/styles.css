@@ -267,3 +267,110 @@ button:disabled {
 #send-btn {
   margin: 0;
 }
+
+/* Emotion Recognition Styles */
+#camera-container {
+  position: relative;
+  width: 100%;
+  max-width: 640px;
+  margin: 1rem auto;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+#camera-feed {
+  width: 100%;
+  height: auto;
+  display: block;
+  background: #000;
+}
+
+#emotion-canvas {
+  width: 100%;
+  height: auto;
+  display: block;
+  background: #000;
+}
+
+#emotion-display {
+  background: #f8f9fa;
+  padding: 1.5rem;
+  border-radius: 8px;
+  margin: 1rem 0;
+  text-align: center;
+  border: 2px solid #e9ecef;
+}
+
+#current-emotion {
+  font-size: 2rem;
+  font-weight: bold;
+  color: #667eea;
+  margin-bottom: 0.5rem;
+  text-transform: capitalize;
+}
+
+#emotion-confidence {
+  font-size: 1.2rem;
+  color: #6c757d;
+  margin-bottom: 0;
+}
+
+#emotion-controls {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  margin: 1rem 0;
+  flex-wrap: wrap;
+}
+
+#emotion-controls button {
+  min-width: 150px;
+  padding: 0.8rem 1.5rem;
+  font-size: 1rem;
+}
+
+#start-camera-btn {
+  background: #28a745;
+}
+
+#start-camera-btn:hover:not(:disabled) {
+  background: #218838;
+}
+
+#stop-camera-btn {
+  background: #dc3545;
+}
+
+#stop-camera-btn:hover:not(:disabled) {
+  background: #c82333;
+}
+
+#continue-to-chat-btn {
+  background: #17a2b8;
+}
+
+#continue-to-chat-btn:hover:not(:disabled) {
+  background: #138496;
+}
+
+/* Responsive design for emotion recognition */
+@media (max-width: 768px) {
+  #camera-container {
+    max-width: 100%;
+  }
+  
+  #emotion-controls {
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  #emotion-controls button {
+    width: 100%;
+    max-width: 300px;
+  }
+  
+  #current-emotion {
+    font-size: 1.5rem;
+  }
+}
