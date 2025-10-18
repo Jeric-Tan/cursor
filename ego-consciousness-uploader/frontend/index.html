@@ -88,6 +88,36 @@
             </div>
             <div id="voice-recording-status"></div>
             <audio id="audio-player" controls style="display: none;"></audio>
+
+            <!-- Integrations (Google Calendar + LinkedIn via Smithery MCP) -->
+            <div id="integrations" class="glass-surface glass-surface--fallback" style="margin-top: 1rem;">
+              <div class="glass-surface__content">
+                <h3 style="text-align:center; margin-bottom: 0.5rem;">Integrations</h3>
+                <div id="calendar-tools" style="margin-bottom: 1rem;">
+                  <p style="margin-bottom:0.5rem; font-weight:600;">Google Calendar</p>
+                  <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+                    <input id="cal-summary" type="text" placeholder="Event title" style="flex:1; min-width:200px;" />
+                    <input id="cal-start" type="datetime-local" style="min-width:180px;" />
+                    <input id="cal-end" type="datetime-local" style="min-width:180px;" />
+                  </div>
+                  <input id="cal-attendees" type="text" placeholder="Attendees (comma emails)" style="width:100%; margin-top:0.5rem;" />
+                  <div style="margin-top:0.5rem;">
+                    <button id="create-event-btn">Create Event</button>
+                    <button id="list-events-btn">List Upcoming</button>
+                  </div>
+                  <div id="calendar-results" style="margin-top:0.5rem;"></div>
+                </div>
+
+                <div id="linkedin-tools">
+                  <p style="margin-bottom:0.5rem; font-weight:600;">LinkedIn</p>
+                  <textarea id="linkedin-text" rows="3" placeholder="Write a LinkedIn post..." style="width:100%;"></textarea>
+                  <div style="margin-top:0.5rem;">
+                    <button id="linkedin-post-btn">Post to LinkedIn</button>
+                  </div>
+                  <div id="linkedin-result" style="margin-top:0.5rem;"></div>
+                </div>
+              </div>
+            </div>
             <div style="margin-top: 20px; text-align: center;">
                 <a href="chat.html" style="color: #666; text-decoration: none; font-size: 0.9rem;">
                     → Open dedicated chat page

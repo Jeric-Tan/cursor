@@ -21,6 +21,33 @@ export const api = {
     return data;
   },
 
+  async createCalendarEvent(payload) {
+    const response = await fetch(`${API_BASE_URL}/api/calendar/create`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!response.ok) throw new Error('Failed to create calendar event');
+    return await response.json();
+  },
+
+  async listCalendarEvents(params = {}) {
+    const qs = new URLSearchParams(params).toString();
+    const response = await fetch(`${API_BASE_URL}/api/calendar/list${qs ? `?${qs}` : ''}`);
+    if (!response.ok) throw new Error('Failed to list calendar events');
+    return await response.json();
+  },
+
+  async postLinkedIn(text, visibility = 'PUBLIC', media = []) {
+    const response = await fetch(`${API_BASE_URL}/api/linkedin/post`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, visibility, media })
+    });
+    if (!response.ok) throw new Error('Failed to post to LinkedIn');
+    return await response.json();
+  },
+
   async uploadPictures(sessionId, photoBlobs) {
     const formData = new FormData();
     formData.append('sessionId', sessionId);

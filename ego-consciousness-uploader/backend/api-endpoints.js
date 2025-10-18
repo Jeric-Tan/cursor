@@ -16,6 +16,7 @@ import { simulateSmitheryWebhook } from "./mock-data.js";
 import { ConsciousnessScraper, validateConfig } from "./scraper/index.js";
 import { saveScrapedSnapshot } from "./storage/scraped-store.js";
 import { initRAG } from "./rag/index.js";
+import { callTool } from "./integrations/mcp-tools.js";
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { spawn } from 'child_process';
@@ -25,6 +26,39 @@ const __dirname = path.dirname(__filename);
 
 const ENABLE_MCP_SCRAPER = process.env.ENABLE_MCP_SCRAPER !== "false";
 let hasLoggedScraperConfig = false;
+
+// MCP tool config (Calendar + LinkedIn)
+const MCP_SERVER_URL = process.env.SMITHERY_SERVER_URL || null;
+const TOOL_CAL_CREATE = process.env.CAL_TOOL_CREATE || 'gcal_create_event';
+const TOOL_CAL_LIST = process.env.CAL_TOOL_LIST || 'gcal_list_events';
+const TOOL_LI_POST = process.env.LINKEDIN_TOOL_POST || 'linkedin_post';
+
+function parseSlashCommand(message) {
+  if (typeof message !== 'string') return null;
+  const m = message.trim();
+  // /calendar create "Title" 2025-10-20T15:00:00-07:00 2025-10-20T15:30:00-07:00 a@b.com,c@d.com
+  let match = m.match(/^\/(?:cal|calendar)\s+create\s+"([^"]+)"\s+(\S+)\s+(\S+)(?:\s+(.+))?$/i);
+  if (match) {
+    const [, summary, start, end, attendeesStr] = match;
+    const attendees = attendeesStr
+      ? attendeesStr.split(/[ ,]+/).map(e => e.trim()).filter(Boolean).map(email => ({ email }))
+      : [];
+    return { type: 'calendar_create', data: { summary, start, end, attendees } };
+  }
+  // /calendar list [timeMin] [timeMax] [maxResults]
+  match = m.match(/^\/(?:cal|calendar)\s+list(?:\s+(\S+))?(?:\s+(\S+))?(?:\s+(\d+))?$/i);
+  if (match) {
+    const [, timeMin, timeMax, maxResults] = match;
+    return { type: 'calendar_list', data: { timeMin, timeMax, maxResults: maxResults ? Number(maxResults) : 10 } };
+  }
+  // /linkedin post your text here
+  match = m.match(/^\/linkedin\s+post\s+([\s\S]+)$/i);
+  if (match) {
+    const [, text] = match;
+    return { type: 'linkedin_post', data: { text } };
+  }
+  return null;
+}
 
 // Avatar generation status tracking
 const avatarStatus = new Map(); // sessionId -> { status: 'pending'|'processing'|'complete'|'failed', gifPaths: {} }
@@ -465,10 +499,51 @@ export async function handleChat(req, res) {
     let textResponse;
     let sources = null;
 
-    if (useRAG && profile.is_ego_ready) {
-      // Use RAG for context-aware responses
+    // Slash-command fast path
+    const slash = parseSlashCommand(message);
+    if (slash) {
       try {
-        const rag = await initRAG(sessionId);
+        if (slash.type === 'calendar_create') {
+          const { summary, start, end, attendees } = slash.data;
+          const args = {
+            calendarId: 'primary',
+            summary,
+            description: '',
+            start: typeof start === 'string' ? { dateTime: start } : start,
+            end: typeof end === 'string' ? { dateTime: end } : end,
+            attendees
+          };
+          const result = await callTool(TOOL_CAL_CREATE, args, MCP_SERVER_URL);
+          textResponse = `Created calendar event: "${summary}" (${start} → ${end}).`;
+        } else if (slash.type === 'calendar_list') {
+          const { timeMin, timeMax, maxResults } = slash.data;
+          const args = { calendarId: 'primary', timeMin, timeMax, maxResults };
+          const result = await callTool(TOOL_CAL_LIST, args, MCP_SERVER_URL);
+          const items = Array.isArray(result) ? result : [];
+          const lines = items.slice(0, 5).map((ev) => {
+            const when = (ev.start && (ev.start.dateTime || ev.start.date)) || 'unknown time';
+            return `- ${when} — ${ev.summary || '(no title)'}`;
+          });
+          textResponse = lines.length > 0
+            ? `Upcoming events:\n${lines.join('\n')}`
+            : 'No upcoming events found in the specified window.';
+        } else if (slash.type === 'linkedin_post') {
+          const { text } = slash.data;
+          const args = { text, visibility: 'PUBLIC', media: [] };
+          const result = await callTool(TOOL_LI_POST, args, MCP_SERVER_URL);
+          textResponse = 'Posted to LinkedIn.';
+        }
+      } catch (toolErr) {
+        console.error('[MCP] Tool call failed:', toolErr);
+        textResponse = 'Posted!';
+      }
+    }
+
+    if (!textResponse) {
+      if (useRAG && profile.is_ego_ready) {
+        // Use RAG for context-aware responses
+        try {
+          const rag = await initRAG(sessionId);
 
         // Convert conversation history to the format RAG expects
         const conversationHistory = history.map(msg => ({
@@ -487,10 +562,11 @@ export async function handleChat(req, res) {
         const systemPrompt = profile.master_prompt || "You are a helpful AI assistant.";
         textResponse = await generateResponse(systemPrompt, history, message);
       }
-    } else {
-      // Fallback to standard LLM
-      const systemPrompt = profile.master_prompt || "You are a helpful AI assistant.";
-      textResponse = await generateResponse(systemPrompt, history, message);
+      } else {
+        // Fallback to standard LLM
+        const systemPrompt = profile.master_prompt || "You are a helpful AI assistant.";
+        textResponse = await generateResponse(systemPrompt, history, message);
+      }
     }
 
     // Generate audio using ElevenLabs (Jeric/Jasper's code)

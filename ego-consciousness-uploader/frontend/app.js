@@ -142,8 +142,22 @@ function setupEventListeners() {
   const chatInput = document.getElementById('chat-input');
   const voiceQuestionBtn = document.getElementById('voice-question-btn');
 
+  // Integrations (Calendar + LinkedIn)
+  const createEventBtn = document.getElementById('create-event-btn');
+  const listEventsBtn = document.getElementById('list-events-btn');
+  const calSummary = document.getElementById('cal-summary');
+  const calStart = document.getElementById('cal-start');
+  const calEnd = document.getElementById('cal-end');
+  const calAttendees = document.getElementById('cal-attendees');
+  const calendarResults = document.getElementById('calendar-results');
+
+  const linkedinText = document.getElementById('linkedin-text');
+  const linkedinPostBtn = document.getElementById('linkedin-post-btn');
+  const linkedinResult = document.getElementById('linkedin-result');
+
   console.log('Found buttons:', {
-    startBtn, capturePhotoBtn, recordBtn, stopBtn, sendBtn, voiceQuestionBtn
+    startBtn, capturePhotoBtn, recordBtn, stopBtn, sendBtn, voiceQuestionBtn,
+    createEventBtn, listEventsBtn, linkedinPostBtn
   });
 
   if (startBtn) {
@@ -198,6 +212,84 @@ function setupEventListeners() {
       }
     });
     console.log('Chat input Enter-to-send enabled');
+  }
+
+  // Calendar: Create event
+  if (createEventBtn) {
+    createEventBtn.addEventListener('click', async () => {
+      try {
+        const summary = calSummary?.value?.trim();
+        const startVal = calStart?.value;
+        const endVal = calEnd?.value;
+        const attendeesRaw = calAttendees?.value?.trim();
+        if (!summary || !startVal || !endVal) {
+          alert('Please fill title, start, and end.');
+          return;
+        }
+        const attendees = attendeesRaw
+          ? attendeesRaw.split(',').map(e => ({ email: e.trim() })).filter(a => a.email)
+          : [];
+        calendarResults.textContent = 'Creating event...';
+        const payload = {
+          summary,
+          start: new Date(startVal).toISOString(),
+          end: new Date(endVal).toISOString(),
+          attendees
+        };
+        const res = await api.createCalendarEvent(payload);
+        calendarResults.textContent = res?.ok ? 'Event created!' : 'Failed to create event';
+      } catch (err) {
+        console.error('Create event error:', err);
+        calendarResults.textContent = 'Error: ' + (err?.message || 'Unknown');
+      }
+    });
+  }
+
+  // Calendar: List events (next 7 days)
+  if (listEventsBtn) {
+    listEventsBtn.addEventListener('click', async () => {
+      try {
+        calendarResults.textContent = 'Loading events...';
+        const now = new Date();
+        const week = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+        const res = await api.listCalendarEvents({
+          timeMin: now.toISOString(),
+          timeMax: week.toISOString(),
+          maxResults: 10
+        });
+        const events = res?.events || [];
+        if (events.length === 0) {
+          calendarResults.textContent = 'No upcoming events found.';
+        } else {
+          calendarResults.innerHTML = '<ul>' + events.map(ev => {
+            const when = ev.start?.dateTime || ev.start?.date || '';
+            return `<li>${when} — ${ev.summary || '(no title)'}</li>`;
+          }).join('') + '</ul>';
+        }
+      } catch (err) {
+        console.error('List events error:', err);
+        calendarResults.textContent = 'Error: ' + (err?.message || 'Unknown');
+      }
+    });
+  }
+
+  // LinkedIn: Post
+  if (linkedinPostBtn) {
+    linkedinPostBtn.addEventListener('click', async () => {
+      try {
+        const text = linkedinText?.value?.trim();
+        if (!text) {
+          alert('Write something to post.');
+          return;
+        }
+        linkedinResult.textContent = 'Posting...';
+        const res = await api.postLinkedIn(text);
+        linkedinResult.textContent = res?.ok ? 'Posted to LinkedIn!' : 'Failed to post';
+      } catch (err) {
+        console.error('LinkedIn post error:', err);
+        linkedinResult.textContent = 'Error: ' + (err?.message || 'Unknown');
+      }
+    });
   }
 
   // Voice question button
