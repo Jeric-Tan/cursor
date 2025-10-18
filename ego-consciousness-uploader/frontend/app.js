@@ -676,7 +676,7 @@ async function pollForCompletion() {
         if (!egoReady && !avatarsReady) {
           updateLoadingMessage('Processing...');
         } else if (egoReady && !avatarsReady) {
-          updateLoadingMessage('Generating your avatar...');
+          updateLoadingMessage('Generating your avatar...\n(This might take a while)');
         } else if (!egoReady && avatarsReady) {
           updateLoadingMessage('Processing...');
         }
