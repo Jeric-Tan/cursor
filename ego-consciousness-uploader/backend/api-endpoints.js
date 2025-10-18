@@ -8,7 +8,7 @@ import {
   saveMessage,
   getConversationHistory,
 } from "./supabase.js";
-import { cloneVoice, textToSpeech } from "./elevenlabs.js";
+import { cloneVoice, cloneVoiceFromFiles, textToSpeech, transcribeSession } from "./elevenlabs.js";
 import { generateResponse } from "./llm.js";
 import { createPersonalityPrompt } from "./prompt-generator.js";
 import { simulateSmitheryWebhook } from "./mock-data.js";
@@ -225,20 +225,18 @@ export async function handleUploadVoice(req, res) {
 
     console.log(`Saved metadata to ${metadataPath}`);
 
-    // Try to upload to Supabase/ElevenLabs if configured
+    // Process audio in background (don't await to return response quickly)
+    processAudioInBackground(sessionId, audioArray, savedPaths, questions);
+
+    // Try to upload to Supabase if configured
     let voiceId = null;
     try {
-      // For ElevenLabs, we could concatenate or use the first file
-      // For now, let's use the first audio file as the voice sample
       const firstAudioUrl = await uploadAudio(sessionId, audioArray[0].data);
-      voiceId = await cloneVoice(firstAudioUrl, sessionId);
-
       await updateProfile(sessionId, {
         voice_sample_url: firstAudioUrl,
-        elevenlabs_voice_id: voiceId,
       });
     } catch (uploadError) {
-      console.warn("Supabase/ElevenLabs upload skipped:", uploadError.message);
+      console.warn("Supabase upload skipped:", uploadError.message);
     }
 
     res.json({
@@ -251,6 +249,64 @@ export async function handleUploadVoice(req, res) {
   } catch (error) {
     console.error("Error in handleUploadVoice:", error);
     res.status(500).json({ error: "Failed to upload voice" });
+  }
+}
+
+/**
+ * Process audio in background (transcription + voice cloning)
+ */
+async function processAudioInBackground(sessionId, audioArray, savedPaths, questions) {
+  try {
+    console.log(`[Background] Processing session: ${sessionId}`);
+    
+    // Transcribe all audio files
+    const audioFilesInfo = savedPaths.map((audioPath, i) => ({
+      path: audioPath,
+      question: questions[i],
+      filename: `answer-${i + 1}`
+    }));
+
+    console.log(`[Background] Starting transcription...`);
+    await transcribeSession(sessionId, audioFilesInfo);
+    console.log(`[Background] Transcription complete`);
+
+    console.log(`[Background] Starting voice cloning...`);
+
+    // Clone voice using all audio files
+    const audioFilesForCloning = audioArray.map((audioFile, i) => ({
+      data: audioFile.data,
+      filename: `answer-${i + 1}.webm`
+    }));
+
+    const voiceId = await cloneVoiceFromFiles(audioFilesForCloning, `Clone_${sessionId}`);
+    console.log(`[Background] Voice cloning complete: ${voiceId}`);
+
+    // Save voice info
+    const voicesDir = path.join(__dirname, '..', 'data', 'voices');
+    if (!fs.existsSync(voicesDir)) {
+      fs.mkdirSync(voicesDir, { recursive: true });
+    }
+
+    const voiceInfoPath = path.join(voicesDir, `${sessionId}_voice.json`);
+    fs.writeFileSync(voiceInfoPath, JSON.stringify({
+      voice_id: voiceId,
+      voice_name: `Clone_${sessionId}`,
+      session_id: sessionId,
+      timestamp: new Date().toISOString()
+    }, null, 2));
+
+    // Update profile with voice ID
+    try {
+      await updateProfile(sessionId, {
+        elevenlabs_voice_id: voiceId,
+      });
+    } catch (error) {
+      console.warn("Could not update profile with voice ID:", error.message);
+    }
+
+    console.log(`✓ Audio processing completed for session: ${sessionId}`);
+  } catch (error) {
+    console.error(`✗ Error processing audio for session ${sessionId}:`, error);
   }
 }
 

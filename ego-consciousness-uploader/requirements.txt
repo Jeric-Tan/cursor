@@ -14,3 +14,10 @@ Pillow>=9.0.0
 
 # Optional: For better performance
 scikit-learn>=1.2.0
+
+# OpenAI for Whisper transcription
+openai>=1.0.0
+python-dotenv>=1.0.0
+
+# ElevenLabs for voice cloning
+requests>=2.31.0
