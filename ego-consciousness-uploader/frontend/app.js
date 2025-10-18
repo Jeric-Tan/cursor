@@ -26,6 +26,54 @@ const state = {
 let mediaRecorder = null;
 let audioChunks = [];
 
+// Lightweight speech synthesis helper for Ego responses
+const speechSynth = (() => {
+  const supported = typeof window !== 'undefined' &&
+    'speechSynthesis' in window &&
+    'SpeechSynthesisUtterance' in window;
+
+  let preferredVoice = null;
+  let initialized = false;
+
+  const pickVoice = () => {
+    if (!supported) return;
+    const voices = window.speechSynthesis.getVoices();
+    if (!voices || voices.length === 0) return;
+
+    const preferredLocales = ['de', 'en'];
+    preferredVoice = voices.find(voice =>
+      preferredLocales.some(locale => voice.lang.toLowerCase().startsWith(locale))
+    ) || voices.find(voice => voice.default) || voices[0];
+  };
+
+  const init = () => {
+    if (!supported || initialized) return;
+    initialized = true;
+    pickVoice();
+    window.speechSynthesis.addEventListener('voiceschanged', pickVoice);
+  };
+
+  const speak = (text) => {
+    if (!supported || !text) return;
+    pickVoice();
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    if (preferredVoice) {
+      utterance.voice = preferredVoice;
+    }
+    utterance.rate = 0.95;
+    utterance.pitch = 0.85;
+    window.speechSynthesis.speak(utterance);
+  };
+
+  const stop = () => {
+    if (!supported) return;
+    window.speechSynthesis.cancel();
+  };
+
+  return { init, speak, stop, supported };
+})();
+
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
   console.log('DOM loaded, setting up event listeners...');
@@ -33,6 +81,7 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Auto-setup for direct chat access
   setupDirectChatAccess();
+  speechSynth.init();
 });
 
 async function setupDirectChatAccess() {
@@ -91,9 +140,10 @@ function setupEventListeners() {
   // Chat stage
   const sendBtn = document.getElementById('send-btn');
   const chatInput = document.getElementById('chat-input');
+  const voiceQuestionBtn = document.getElementById('voice-question-btn');
 
   console.log('Found buttons:', {
-    startBtn, capturePhotoBtn, recordBtn, stopBtn, sendBtn
+    startBtn, capturePhotoBtn, recordBtn, stopBtn, sendBtn, voiceQuestionBtn
   });
 
   if (startBtn) {
@@ -148,6 +198,57 @@ function setupEventListeners() {
       }
     });
     console.log('Chat input Enter-to-send enabled');
+  }
+
+  // Voice question button
+  if (voiceQuestionBtn) {
+    let questionRecorder = null;
+    let questionChunks = [];
+    let questionStream = null;
+
+    voiceQuestionBtn.addEventListener('click', async () => {
+      if (!questionRecorder || questionRecorder.state === 'inactive') {
+        // Start recording
+        try {
+          questionChunks = [];
+          questionStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          
+          // Use MP3 if supported, otherwise fall back to WebM
+          const mimeType = MediaRecorder.isTypeSupported('audio/mpeg')
+            ? 'audio/mpeg'
+            : 'audio/webm';
+          
+          questionRecorder = new MediaRecorder(questionStream, { mimeType });
+
+          questionRecorder.ondataavailable = (event) => {
+            questionChunks.push(event.data);
+          };
+
+          questionRecorder.onstop = async () => {
+            const audioBlob = new Blob(questionChunks, { type: mimeType });
+            await sendVoiceQuestion(audioBlob);
+            if (questionStream) {
+              questionStream.getTracks().forEach(track => track.stop());
+            }
+          };
+
+          questionRecorder.start();
+          voiceQuestionBtn.textContent = '⏹️';
+          voiceQuestionBtn.classList.add('recording');
+          document.getElementById('voice-recording-status').textContent = '🔴 Recording...';
+        } catch (error) {
+          alert('Error accessing microphone: ' + error.message);
+        }
+      } else {
+        // Stop recording
+        questionRecorder.stop();
+        voiceQuestionBtn.textContent = '🎤';
+        voiceQuestionBtn.classList.remove('recording');
+        document.getElementById('voice-recording-status').textContent = 'Processing...';
+      }
+    });
+
+    console.log('Voice question button enabled');
   }
 }
 
@@ -592,7 +693,7 @@ async function pollForCompletion() {
   });
 }
 
-// Stage 4: Chat
+// Stage 4: Chat (Text)
 async function sendMessage() {
   const input = document.getElementById('chat-input');
   const message = input.value.trim();
@@ -607,20 +708,43 @@ async function sendMessage() {
     // Send to backend with RAG enabled
     const response = await api.sendMessage(state.sessionId, message, true);
 
-    // Add Ego response to UI
-    addMessageToChat('ego', response.textResponse, response.sources);
-
-    // Play audio response
-    if (response.audioUrl) {
-      playAudio(response.audioUrl);
-    }
+    // Add Ego response to UI with audio
+    addMessageToChat('ego', response.textResponse, response.sources, response.audioUrl);
 
   } catch (error) {
     alert('Error sending message: ' + error.message);
   }
 }
 
-function addMessageToChat(role, content, sources = null) {
+// Stage 4: Chat (Voice)
+async function sendVoiceQuestion(audioBlob) {
+  try {
+    // Add placeholder for user question
+    addMessageToChat('user', '🎤 Voice question...');
+    
+    // Send audio to backend
+    const response = await api.sendVoiceQuestion(state.sessionId, audioBlob);
+    
+    // Update with transcribed question
+    if (response.transcribedQuestion) {
+      const lastUserMsg = document.querySelector('.message.user:last-child .message-content');
+      if (lastUserMsg) {
+        lastUserMsg.textContent = response.transcribedQuestion;
+      }
+    }
+
+    // Add Ego response to UI with audio
+    addMessageToChat('ego', response.textResponse, response.sources, response.audioUrl);
+    
+    document.getElementById('voice-recording-status').textContent = '';
+
+  } catch (error) {
+    document.getElementById('voice-recording-status').textContent = 'Error: ' + error.message;
+    console.error('Error sending voice question:', error);
+  }
+}
+
+function addMessageToChat(role, content, sources = null, audioUrl = null) {
   const messagesContainer = document.getElementById('chat-messages');
   const messageDiv = document.createElement('div');
   messageDiv.className = `message ${role}`;
@@ -634,6 +758,22 @@ function addMessageToChat(role, content, sources = null) {
   // Update avatar display for ego messages
   if (role === 'ego') {
     updateAvatarDisplay();
+  // Add play button for Ego responses with audio
+  if (role === 'ego' && audioUrl) {
+    const playButton = document.createElement('button');
+    playButton.className = 'play-audio-btn';
+    playButton.innerHTML = '🔊 Play';
+    playButton.onclick = () => playAudio(audioUrl);
+    messageDiv.appendChild(playButton);
+  }
+
+  // Auto-play ElevenLabs audio if available, otherwise use browser speech synthesis
+  if (role === 'ego' && audioUrl) {
+    // Play the ElevenLabs cloned voice audio
+    playAudio(audioUrl);
+  } else if (role === 'ego' && speechSynth.supported) {
+    // Fallback to browser speech synthesis only if no audio URL
+    speechSynth.speak(content);
   }
 
   // Add sources if available (RAG responses)
@@ -653,6 +793,7 @@ function addMessageToChat(role, content, sources = null) {
 
   messagesContainer.appendChild(messageDiv);
   messagesContainer.scrollTop = messagesContainer.scrollHeight;
+  }
 }
 
 function updateAvatarDisplay() {
@@ -716,6 +857,7 @@ function setInitialAvatar() {
 }
 
 function playAudio(audioUrl) {
+  speechSynth.stop();
   const audioPlayer = document.getElementById('audio-player');
   audioPlayer.src = audioUrl;
   audioPlayer.play();

@@ -9,7 +9,7 @@ import {
   saveMessage,
   getConversationHistory,
 } from "./supabase.js";
-import { cloneVoice, textToSpeech } from "./elevenlabs.js";
+import { cloneVoice, cloneVoiceFromFiles, textToSpeech, transcribeSession } from "./elevenlabs.js";
 import { generateResponse } from "./llm.js";
 import { createPersonalityPrompt } from "./prompt-generator.js";
 import { simulateSmitheryWebhook } from "./mock-data.js";
@@ -295,7 +295,7 @@ export async function handleUploadVoice(req, res) {
     for (let i = 0; i < audioArray.length; i++) {
       const audioFile = audioArray[i];
 
-      // Determine file extension from mime type
+      // Determine file extension from mime type - use WebM (browser's native format)
       const extension = audioFile.mimetype.includes('mpeg') ? 'mp3' :
                        audioFile.mimetype.includes('wav') ? 'wav' : 'webm';
 
@@ -328,20 +328,18 @@ export async function handleUploadVoice(req, res) {
 
     console.log(`Saved metadata to ${metadataPath}`);
 
-    // Try to upload to Supabase/ElevenLabs if configured
+    // Process audio in background (don't await to return response quickly)
+    processAudioInBackground(sessionId, audioArray, savedPaths, questions);
+
+    // Try to upload to Supabase if configured
     let voiceId = null;
     try {
-      // For ElevenLabs, we could concatenate or use the first file
-      // For now, let's use the first audio file as the voice sample
       const firstAudioUrl = await uploadAudio(sessionId, audioArray[0].data);
-      voiceId = await cloneVoice(firstAudioUrl, sessionId);
-
       await updateProfile(sessionId, {
         voice_sample_url: firstAudioUrl,
-        elevenlabs_voice_id: voiceId,
       });
     } catch (uploadError) {
-      console.warn("Supabase/ElevenLabs upload skipped:", uploadError.message);
+      console.warn("Supabase upload skipped:", uploadError.message);
     }
 
     // Trigger avatar generation asynchronously
@@ -359,6 +357,69 @@ export async function handleUploadVoice(req, res) {
   } catch (error) {
     console.error("Error in handleUploadVoice:", error);
     res.status(500).json({ error: "Failed to upload voice" });
+  }
+}
+
+/**
+ * Process audio in background (transcription + voice cloning)
+ */
+async function processAudioInBackground(sessionId, audioArray, savedPaths, questions) {
+  try {
+    console.log(`[Background] Processing session: ${sessionId}`);
+    
+    // Transcribe all audio files
+    const audioFilesInfo = savedPaths.map((audioPath, i) => ({
+      path: audioPath,
+      question: questions[i],
+      filename: `answer-${i + 1}`
+    }));
+
+    console.log(`[Background] Starting transcription...`);
+    await transcribeSession(sessionId, audioFilesInfo);
+    console.log(`[Background] Transcription complete`);
+
+    console.log(`[Background] Starting voice cloning...`);
+
+    // Clone voice using all audio files
+    const audioFilesForCloning = audioArray.map((audioFile, i) => ({
+      data: audioFile.data,
+      filename: `answer-${i + 1}.webm`  // Use WebM format (browser's native format)
+    }));
+
+    const voiceId = await cloneVoiceFromFiles(audioFilesForCloning, `Clone_${sessionId}`);
+    
+    if (voiceId) {
+      console.log(`[Background] Voice cloning complete: ${voiceId}`);
+      
+      // Save voice info
+      const voicesDir = path.join(__dirname, '..', 'data', 'voices');
+      if (!fs.existsSync(voicesDir)) {
+        fs.mkdirSync(voicesDir, { recursive: true });
+      }
+
+      const voiceInfoPath = path.join(voicesDir, `${sessionId}_voice.json`);
+      fs.writeFileSync(voiceInfoPath, JSON.stringify({
+        voice_id: voiceId,
+        voice_name: `Clone_${sessionId}`,
+        session_id: sessionId,
+        timestamp: new Date().toISOString()
+      }, null, 2));
+
+      // Update profile with voice ID
+      try {
+        await updateProfile(sessionId, {
+          elevenlabs_voice_id: voiceId,
+        });
+      } catch (error) {
+        console.warn("Could not update profile with voice ID:", error.message);
+      }
+    } else {
+      console.log(`[Background] Voice cloning failed, continuing without cloned voice`);
+    }
+
+    console.log(`✓ Audio processing completed for session: ${sessionId}`);
+  } catch (error) {
+    console.error(`✗ Error processing audio for session ${sessionId}:`, error);
   }
 }
 
@@ -433,6 +494,37 @@ export async function handleChat(req, res) {
     }
 
     // Generate audio using ElevenLabs (Jeric/Jasper's code)
+    console.log(`\n🔍 [CHAT TTS DEBUG]`);
+    console.log(`Session ID: ${sessionId}`);
+    console.log(`Profile Voice ID: ${profile.elevenlabs_voice_id || 'NULL/UNDEFINED'}`);
+    console.log(`Profile Object:`, JSON.stringify({
+      id: profile.id,
+      full_name: profile.full_name,
+      elevenlabs_voice_id: profile.elevenlabs_voice_id,
+      is_ego_ready: profile.is_ego_ready
+    }, null, 2));
+    
+    // If no voice ID, try to recover from voice file
+    if (!profile.elevenlabs_voice_id) {
+      console.warn(`⚠️  No voice ID in profile! Attempting to recover from voice file...`);
+      const voicesDir = path.join(__dirname, '..', 'data', 'voices');
+      const voiceInfoPath = path.join(voicesDir, `${sessionId}_voice.json`);
+      
+      if (fs.existsSync(voiceInfoPath)) {
+        const voiceInfo = JSON.parse(fs.readFileSync(voiceInfoPath, 'utf8'));
+        console.log(`✅ Found voice file! Using voice ID: ${voiceInfo.voice_id}`);
+        profile.elevenlabs_voice_id = voiceInfo.voice_id;
+        
+        // Update profile in database
+        await updateProfile(sessionId, { elevenlabs_voice_id: voiceInfo.voice_id });
+      } else {
+        console.error(`❌ No voice file found at: ${voiceInfoPath}`);
+      }
+    }
+    
+    console.log(`Final Voice ID for TTS: ${profile.elevenlabs_voice_id || 'WILL USE DEFAULT'}`);
+    console.log(`🔍 [END TTS DEBUG]\n`);
+    
     const audioUrl = await textToSpeech(
       textResponse,
       profile.elevenlabs_voice_id
@@ -630,6 +722,123 @@ export async function handleGetAvatar(req, res) {
     res.status(500).json({ error: "Failed to serve avatar file" });
   }
 }
+// POST /api/voice-question (speech-to-speech chat)
+export async function handleVoiceQuestion(req, res) {
+  try {
+    const { sessionId } = req.body;
+    const audioFile = req.files?.audio;
+
+    if (!sessionId || !audioFile) {
+      return res.status(400).json({ error: "Session ID and audio are required" });
+    }
+
+    const timestamp = Date.now();
+
+    // Save user question to data/conversation/user_question/
+    const userQuestionDir = path.join(__dirname, '..', 'data', 'conversation', 'user_question', sessionId);
+    if (!fs.existsSync(userQuestionDir)) {
+      fs.mkdirSync(userQuestionDir, { recursive: true });
+    }
+
+    const questionFilename = `question-${timestamp}.mp3`;
+    const questionPath = path.join(userQuestionDir, questionFilename);
+    fs.writeFileSync(questionPath, audioFile.data);
+
+    console.log(`💬 Saved user question audio: ${questionPath}`);
+
+    // Transcribe the question using Whisper
+    const { transcribeAudio } = await import('./elevenlabs.js');
+    const transcribedQuestion = await transcribeAudio(questionPath);
+
+    if (!transcribedQuestion) {
+      return res.status(400).json({ error: "Failed to transcribe question" });
+    }
+
+    console.log(`📝 Transcribed: "${transcribedQuestion}"`);
+
+    // Save transcription as JSON
+    const transcriptionPath = path.join(userQuestionDir, `question-${timestamp}.json`);
+    fs.writeFileSync(transcriptionPath, JSON.stringify({ question: transcribedQuestion }, null, 2));
+
+    // Get profile and conversation history
+    const profile = await getProfile(sessionId);
+    const history = await getConversationHistory(sessionId);
+
+    // Save user message
+    await saveMessage(sessionId, "user", transcribedQuestion);
+
+    let textResponse;
+    let sources = null;
+
+    // Use RAG for context-aware responses
+    if (profile.is_ego_ready) {
+      try {
+        const rag = await initRAG(sessionId);
+        const conversationHistory = history.map(msg => ({
+          role: msg.role,
+          content: msg.content,
+        }));
+
+        const result = await rag.query(transcribedQuestion, {
+          topK: 5,
+          conversationHistory,
+        });
+        textResponse = result.answer;
+        sources = result.sources;
+      } catch (ragError) {
+        console.warn("RAG query failed, falling back to standard LLM:", ragError);
+        const systemPrompt = profile.master_prompt || "You are a helpful AI assistant.";
+        textResponse = await generateResponse(systemPrompt, history, transcribedQuestion);
+      }
+    } else {
+      const systemPrompt = profile.master_prompt || "You are a helpful AI assistant.";
+      textResponse = await generateResponse(systemPrompt, history, transcribedQuestion);
+    }
+
+    // Generate audio response using ElevenLabs
+    const audioUrl = await textToSpeech(
+      textResponse,
+      profile.elevenlabs_voice_id
+    );
+
+    // Save AI reply to data/conversation/reply/
+    const replyDir = path.join(__dirname, '..', 'data', 'conversation', 'reply', sessionId);
+    if (!fs.existsSync(replyDir)) {
+      fs.mkdirSync(replyDir, { recursive: true });
+    }
+
+    const replyFilename = `reply-${timestamp}.mp3`;
+    const replyPath = path.join(replyDir, replyFilename);
+    
+    // Copy generated audio to reply folder
+    if (audioUrl) {
+      const generatedAudioPath = path.join(__dirname, '..', 'data', audioUrl.replace('/generated-audio/', 'generated-audio/'));
+      if (fs.existsSync(generatedAudioPath)) {
+        fs.copyFileSync(generatedAudioPath, replyPath);
+      }
+    }
+
+    // Save reply transcription as JSON
+    const replyTranscriptionPath = path.join(replyDir, `reply-${timestamp}.json`);
+    fs.writeFileSync(replyTranscriptionPath, JSON.stringify({ reply: textResponse }, null, 2));
+
+    console.log(`🤖 Saved AI reply: ${replyPath}`);
+
+    // Save assistant message
+    await saveMessage(sessionId, "assistant", textResponse, audioUrl);
+
+    res.json({
+      transcribedQuestion,
+      textResponse,
+      audioUrl,
+      sources,
+    });
+
+  } catch (error) {
+    console.error("Error in handleVoiceQuestion:", error);
+    res.status(500).json({ error: "Failed to process voice question" });
+  }
+}
 
 // POST /api/webhook (for Smithery callback)
 export async function handleWebhook(req, res) {
@@ -647,4 +856,5 @@ export async function handleWebhook(req, res) {
     console.error("Error in handleWebhook:", error);
     res.status(500).json({ error: "Failed to process webhook" });
   }
+
 }

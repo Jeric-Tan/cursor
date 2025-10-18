@@ -71,11 +71,11 @@ export async function updateProfile(sessionId, updates) {
 export async function uploadAudio(sessionId, audioFile) {
   if (USE_MOCK) return mockSupabase.uploadAudio(sessionId, audioFile);
 
-  const fileName = `${sessionId}-${Date.now()}.webm`;
+  const fileName = `${sessionId}-${Date.now()}.mp3`;
   const { data, error } = await supabase.storage
     .from('voice-samples')
     .upload(fileName, audioFile, {
-      contentType: 'audio/webm'
+      contentType: 'audio/mpeg'
     });
 
   if (error) throw error;

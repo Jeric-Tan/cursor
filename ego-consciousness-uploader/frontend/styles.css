@@ -422,6 +422,27 @@ button:active:not(:disabled) {
   transform: scale(1.05);
 }
 
+/* Play audio button styling */
+.play-audio-btn {
+  background: #4CAF50;
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  margin-top: 8px;
+  transition: background-color 0.2s;
+}
+
+.play-audio-btn:hover {
+  background: #45a049;
+}
+
+.play-audio-btn:active {
+  background: #3d8b40;
+}
+
 #chat-input-container {
   display: flex;
   gap: 0.5rem;

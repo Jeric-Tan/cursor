@@ -74,6 +74,24 @@ export const api = {
     return await response.json();
   },
 
+  async sendVoiceQuestion(sessionId, audioBlob) {
+    // POST to /api/voice-question with audio
+    const formData = new FormData();
+    formData.append('sessionId', sessionId);
+    formData.append('audio', audioBlob, `question-${Date.now()}.mp3`);
+
+    const response = await fetch(`${API_BASE_URL}/api/voice-question`, {
+      method: 'POST',
+      body: formData
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to send voice question');
+    }
+
+    return await response.json();
+  },
+
   async getSessionStatus(sessionId) {
     // TODO: GET /api/status
     const response = await fetch(`${API_BASE_URL}${API_ENDPOINTS.STATUS}?sessionId=${sessionId}`);
