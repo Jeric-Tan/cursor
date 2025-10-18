@@ -135,26 +135,26 @@ class AvatarPuppeteer:
             'neutral': [
                 "Create a new image: Make the exact same person with a very subtle change - the mouth is gently closed with the lips touching, as if pronouncing the sound 'Mmm'. Keep everything else identical including expression, lighting, and pose.",
                 "Create a new image: Make the exact same person with a very subtle change - the jaw is relaxed and the mouth is slightly open, as if saying a soft 'ah' sound. Keep everything else identical including expression, lighting, and pose.",
-                "Create a new image: Make the exact same person with a very subtle change - the mouth is open and the lips are rounded, as if pronouncing an 'Ooh' sound. Keep everything else identical including expression, lighting, and pose.",
+                # "Create a new image: Make the exact same person with a very subtle change - the mouth is open and the lips are rounded, as if pronouncing an 'Ooh' sound. Keep everything else identical including expression, lighting, and pose.",
                 # "Create a new image: Make the exact same person with a very subtle change - the lips are slightly pulled back to show a hint of the upper teeth, as if pronouncing the sound 'Ee'. Keep everything else identical including expression, lighting, and pose.",
             ],
 
             'happy': [
                 "Create a new image: Make the exact same person with a very subtle change - the mouth is gently closed with the lips touching, as if pronouncing the sound 'Mmm'. Keep everything else identical including expression, lighting, and pose.",
                 "Create a new image: Make the exact same person with a very subtle change - the jaw is relaxed and the mouth is slightly open, as if saying a soft 'ah' sound. Keep everything else identical including expression, lighting, and pose.",
-                "Create a new image: Make the exact same person with a very subtle change - the mouth is open and the lips are rounded, as if pronouncing an 'Ooh' sound. Keep everything else identical including expression, lighting, and pose.",
+                # "Create a new image: Make the exact same person with a very subtle change - the mouth is open and the lips are rounded, as if pronouncing an 'Ooh' sound. Keep everything else identical including expression, lighting, and pose.",
                 # "Create a new image: Make the exact same person with a very subtle change - the lips are slightly pulled back to show a hint of the upper teeth, as if pronouncing the sound 'Ee'. Keep everything else identical including expression, lighting, and pose.",
             ],
             'sad': [
                 "Create a new image: Make the exact same person with a very subtle change - the mouth is gently closed with the lips touching, as if pronouncing the sound 'Mmm'. Keep everything else identical including expression, lighting, and pose.",
                 "Create a new image: Make the exact same person with a very subtle change - the jaw is relaxed and the mouth is slightly open, as if saying a soft 'ah' sound. Keep everything else identical including expression, lighting, and pose.",
-                "Create a new image: Make the exact same person with a very subtle change - the mouth is open and the lips are rounded, as if pronouncing an 'Ooh' sound. Keep everything else identical including expression, lighting, and pose.",
+                # "Create a new image: Make the exact same person with a very subtle change - the mouth is open and the lips are rounded, as if pronouncing an 'Ooh' sound. Keep everything else identical including expression, lighting, and pose.",
                 # "Create a new image: Make the exact same person with a very subtle change - the lips are slightly pulled back to show a hint of the upper teeth, as if pronouncing the sound 'Ee'. Keep everything else identical including expression, lighting, and pose.",
             ],
             'angry': [
                 "Create a new image: Make the exact same person with a very subtle change - the mouth is gently closed with the lips touching, as if pronouncing the sound 'Mmm'. Keep everything else identical including expression, lighting, and pose.",
                 "Create a new image: Make the exact same person with a very subtle change - the jaw is relaxed and the mouth is slightly open, as if saying a soft 'ah' sound. Keep everything else identical including expression, lighting, and pose.",
-                "Create a new image: Make the exact same person with a very subtle change - the mouth is open and the lips are rounded, as if pronouncing an 'Ooh' sound. Keep everything else identical including expression, lighting, and pose.",
+                # "Create a new image: Make the exact same person with a very subtle change - the mouth is open and the lips are rounded, as if pronouncing an 'Ooh' sound. Keep everything else identical including expression, lighting, and pose.",
                 # "Create a new image: Make the exact same person with a very subtle change - the lips are slightly pulled back to show a hint of the upper teeth, as if pronouncing the sound 'Ee'. Keep everything else identical including expression, lighting, and pose.",
             ],
         }
@@ -162,7 +162,7 @@ class AvatarPuppeteer:
         return base_variations.get(emotion, base_variations['neutral'])
     
     def generate_stop_motion_variations(self, avatar_path: str, emotion: str, 
-                                      num_variations: int = 4, 
+                                      num_variations: int = 2, 
                                       output_dir: str = "stop_motion") -> List[str]:
         """
         Generate stop-motion variations of an avatar image.

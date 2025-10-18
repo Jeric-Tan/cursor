@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Emotion Recognition Connection</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .connected { background-color: #d4edda; color: #155724; }
+        .disconnected { background-color: #f8d7da; color: #721c24; }
+        .message { background-color: #d1ecf1; color: #0c5460; }
+        #messages {
+            height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            padding: 10px;
+            background-color: #f8f9fa;
+        }
+    </style>
+</head>
+<body>
+    <h1>Emotion Recognition WebSocket Test</h1>
+    
+    <div id="status" class="status disconnected">Disconnected</div>
+    
+    <button id="connectBtn">Connect to Emotion Service</button>
+    <button id="disconnectBtn" disabled>Disconnect</button>
+    
+    <h3>Messages:</h3>
+    <div id="messages"></div>
+
+    <script>
+        let ws = null;
+        const statusDiv = document.getElementById('status');
+        const messagesDiv = document.getElementById('messages');
+        const connectBtn = document.getElementById('connectBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+
+        function addMessage(message) {
+            const div = document.createElement('div');
+            div.className = 'message';
+            div.textContent = new Date().toLocaleTimeString() + ': ' + message;
+            messagesDiv.appendChild(div);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function updateStatus(connected) {
+            if (connected) {
+                statusDiv.textContent = 'Connected to ws://localhost:8765';
+                statusDiv.className = 'status connected';
+                connectBtn.disabled = true;
+                disconnectBtn.disabled = false;
+            } else {
+                statusDiv.textContent = 'Disconnected';
+                statusDiv.className = 'status disconnected';
+                connectBtn.disabled = false;
+                disconnectBtn.disabled = true;
+            }
+        }
+
+        function connect() {
+            try {
+                ws = new WebSocket('ws://localhost:8765');
+                
+                ws.onopen = () => {
+                    updateStatus(true);
+                    addMessage('Connected to emotion recognition service');
+                };
+                
+                ws.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        addMessage(`Received: ${JSON.stringify(data, null, 2)}`);
+                    } catch (e) {
+                        addMessage(`Received (raw): ${event.data}`);
+                    }
+                };
+                
+                ws.onclose = () => {
+                    updateStatus(false);
+                    addMessage('Connection closed');
+                };
+                
+                ws.onerror = (error) => {
+                    addMessage(`Error: ${error}`);
+                    updateStatus(false);
+                };
+                
+            } catch (error) {
+                addMessage(`Failed to connect: ${error.message}`);
+            }
+        }
+
+        function disconnect() {
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+        }
+
+        connectBtn.addEventListener('click', connect);
+        disconnectBtn.addEventListener('click', disconnect);
+
+        // Auto-connect on page load
+        window.addEventListener('load', () => {
+            addMessage('Page loaded. Click "Connect to Emotion Service" to test.');
+        });
+    </script>
+</body>
+</html>

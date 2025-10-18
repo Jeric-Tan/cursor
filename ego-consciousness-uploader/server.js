@@ -13,7 +13,12 @@ import {
   handleUploadVoice,
   handleGetStatus,
   handleChat,
-  handleWebhook
+  handleWebhook,
+  handleGetAvatarStatus,
+  handleGetAvatar,
+  handleSetAvatarStatus,
+  handleGetLatestSession,
+  handleScanSessions
 } from './backend/api-endpoints.js';
 
 // Load environment variables
@@ -49,11 +54,19 @@ app.use('/shared', express.static(path.join(__dirname, 'shared'), {
   }
 }));
 
+// Serve avatar files
+app.use('/api/avatars', express.static(path.join(__dirname, 'data', 'avatars')));
+
 // API Routes
 app.post('/api/start', handleStart);
 app.post('/api/upload-pictures', handleUploadPictures);
 app.post('/api/upload-voice', handleUploadVoice);
 app.get('/api/status', handleGetStatus);
+app.get('/api/avatar-status', handleGetAvatarStatus);
+app.get('/api/latest-session', handleGetLatestSession);
+app.get('/api/scan-sessions', handleScanSessions);
+app.get('/api/avatars/:sessionId/:filename', handleGetAvatar);
+app.post('/api/set-avatar-status', handleSetAvatarStatus);
 app.post('/api/chat', handleChat);
 app.post('/api/webhook', handleWebhook);
 

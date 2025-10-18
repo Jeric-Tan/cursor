@@ -165,6 +165,25 @@ start_all.bat   # Windows
 
 The emotion recognition stage appears after voice recording, before chat.
 
+### AI-Assisted Photo Capture (NEW!)
+
+For the best experience with emotion-based photo capture:
+
+```bash
+# Terminal 1: Start the emotion recognition service
+python start_emotion_service.py
+
+# Terminal 2: Start the main app
+npm run dev
+```
+
+**Features:**
+- ✅ Real-time emotion detection during photo capture
+- ✅ Auto-capture when target emotion is detected with stability
+- ✅ Visual feedback showing detected emotion and confidence
+- ✅ Manual fallback mode when AI struggles
+- ✅ Toggle between AI-assisted and manual modes
+
 ### Features
 - ✅ Real-time facial emotion detection using DeepFace AI
 - ✅ 7 emotions: angry, disgust, fear, happy, sad, surprise, neutral

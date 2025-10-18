@@ -14,7 +14,12 @@ const state = {
   messages: [],
   cameraStream: null,
   currentPhotoCount: 0,
-  audioChunks: []
+  audioChunks: [],
+  manualCaptureMode: false,
+  failedCaptureAttempts: 0,
+  avatarGifs: {},
+  emotionClient: null,
+  aiAssistedMode: true
 };
 
 // MediaRecorder for voice recording
@@ -25,7 +30,49 @@ let audioChunks = [];
 document.addEventListener('DOMContentLoaded', () => {
   console.log('DOM loaded, setting up event listeners...');
   setupEventListeners();
+  
+  // Auto-setup for direct chat access
+  setupDirectChatAccess();
 });
+
+async function setupDirectChatAccess() {
+  // If we're directly accessing the chat stage, set up a mock session
+  const chatStage = document.getElementById('chat-stage');
+  if (chatStage && chatStage.classList.contains('active')) {
+    console.log('Setting up direct chat access...');
+    
+    try {
+      // Get the latest session with avatars
+      const latestSession = await api.getLatestSessionWithAvatars();
+      if (latestSession.sessionId) {
+        state.sessionId = latestSession.sessionId;
+        console.log('Using latest session:', latestSession.sessionId);
+        
+        // Get avatar status for this session
+        const avatarStatus = await api.getAvatarStatus(latestSession.sessionId);
+        console.log('Avatar status for direct access:', avatarStatus);
+        
+        if (avatarStatus.status === 'complete' && avatarStatus.gifPaths) {
+          // Convert relative URLs to full URLs
+          state.avatarGifs = {};
+          for (const [emotion, url] of Object.entries(avatarStatus.gifPaths)) {
+            state.avatarGifs[emotion] = url.startsWith('http') ? url : `http://localhost:3001${url}`;
+          }
+          console.log('Direct access - Avatars loaded:', state.avatarGifs);
+        }
+      } else {
+        console.warn('No sessions with avatars found for direct access');
+      }
+    } catch (error) {
+      console.error('Error setting up direct chat access:', error);
+    }
+    
+    // Set initial avatar
+    setInitialAvatar();
+    
+    console.log('Direct chat access setup complete');
+  }
+}
 
 function setupEventListeners() {
   console.log('Setting up event listeners...');
@@ -36,6 +83,8 @@ function setupEventListeners() {
 
   // Camera capture stage
   const capturePhotoBtn = document.getElementById('capture-photo-btn');
+  const manualCaptureBtn = document.getElementById('manual-capture-btn');
+  const aiModeToggle = document.getElementById('ai-assisted-mode');
   const recordBtn = document.getElementById('record-btn');
   const stopBtn = document.getElementById('stop-btn');
 
@@ -64,6 +113,16 @@ function setupEventListeners() {
   if (capturePhotoBtn) {
     capturePhotoBtn.addEventListener('click', capturePhoto);
     console.log('Capture photo button listener added');
+  }
+
+  if (manualCaptureBtn) {
+    manualCaptureBtn.addEventListener('click', manualCapturePhoto);
+    console.log('Manual capture button listener added');
+  }
+
+  if (aiModeToggle) {
+    aiModeToggle.addEventListener('change', toggleAIMode);
+    console.log('AI mode toggle listener added');
   }
 
   if (recordBtn) {
@@ -128,16 +187,110 @@ async function startCamera() {
     videoElement.srcObject = state.cameraStream;
 
     console.log('Camera started successfully');
+    
+    // Initialize emotion capture client if AI mode is enabled
+    if (state.aiAssistedMode) {
+      console.log('🎭 AI-assisted mode enabled, initializing emotion capture...');
+      await initializeEmotionCapture();
+      
+      // Set initial target emotion (neutral for first photo)
+      if (state.emotionClient) {
+        state.emotionClient.setTargetEmotion('neutral');
+        console.log('🎯 Set initial target emotion: neutral');
+      }
+    }
   } catch (error) {
     alert('Error accessing camera: ' + error.message);
   }
 }
 
+async function initializeEmotionCapture() {
+  try {
+    if (!window.EmotionCaptureClient) {
+      console.warn('EmotionCaptureClient not available');
+      return;
+    }
+
+    state.emotionClient = new window.EmotionCaptureClient();
+    
+    // Set up event handlers
+    state.emotionClient.onEmotionDetected = (data) => {
+      updateEmotionFeedback(data);
+    };
+    
+    state.emotionClient.onStabilityReached = (data) => {
+      console.log(`Stability reached for ${data.emotion}! Auto-capturing...`);
+      capturePhoto();
+    };
+    
+    state.emotionClient.onConnectionChange = (connected) => {
+      const statusElement = document.getElementById('emotion-status');
+      if (connected) {
+        console.log('✅ Connected to emotion recognition service');
+        if (statusElement) {
+          statusElement.textContent = 'Connected';
+          statusElement.style.color = '#10b981';
+        }
+      } else {
+        console.log('❌ Disconnected from emotion recognition service');
+        if (statusElement) {
+          statusElement.textContent = 'Disconnected';
+          statusElement.style.color = '#ef4444';
+        }
+      }
+    };
+    
+    // Connect to WebSocket
+    await state.emotionClient.connect();
+    console.log('Emotion capture client initialized');
+    
+  } catch (error) {
+    console.warn('❌ Failed to initialize emotion capture:', error);
+    // Update status to show error
+    const statusElement = document.getElementById('emotion-status');
+    if (statusElement) {
+      statusElement.textContent = 'Connection Failed';
+      statusElement.style.color = '#ef4444';
+    }
+    // Fall back to manual mode
+    state.aiAssistedMode = false;
+    document.getElementById('ai-assisted-mode').checked = false;
+    console.log('🔄 Fallback to manual mode');
+  }
+}
+
+function toggleAIMode(event) {
+  state.aiAssistedMode = event.target.checked;
+  
+  if (state.aiAssistedMode && state.cameraStream) {
+    // Initialize emotion capture if camera is already running
+    initializeEmotionCapture();
+  } else if (!state.aiAssistedMode && state.emotionClient) {
+    // Disconnect emotion client
+    state.emotionClient.disconnect();
+    state.emotionClient = null;
+  }
+}
+
+function updateEmotionFeedback(data) {
+  // Update the instruction text to show progress
+  const instruction = document.getElementById('photo-instruction');
+  const currentInstruction = PHOTO_INSTRUCTIONS[state.currentPhotoCount];
+  
+  instruction.innerHTML = `
+    ${currentInstruction}<br>
+    <small style="color: #4ade80;">
+      Detected: ${data.emotion} (${Math.round(data.confidence)}% confidence)<br>
+      Stability: ${data.stability}/${data.required} frames
+    </small>
+  `;
+}
+
 const PHOTO_INSTRUCTIONS = [
   "Picture 1 of 4: Look at the camera with a neutral expression",
-  "Picture 2 of 4: Smile naturally",
-  "Picture 3 of 4: Look slightly to the left",
-  "Picture 4 of 4: Look slightly to the right"
+  "Picture 2 of 4: Smile naturally (happy expression)",
+  "Picture 3 of 4: Show a sad expression",
+  "Picture 4 of 4: Show an angry expression"
 ];
 
 async function capturePhoto() {
@@ -163,10 +316,26 @@ async function capturePhoto() {
     photoSlot.style.backgroundSize = 'cover';
     photoSlot.textContent = '';
 
+    // Reset failed attempts and hide manual button
+    state.failedCaptureAttempts = 0;
+    document.getElementById('manual-capture-btn').style.display = 'none';
+
     if (state.currentPhotoCount < 4) {
       // Update instruction for next photo
       document.getElementById('photo-instruction').textContent =
         PHOTO_INSTRUCTIONS[state.currentPhotoCount];
+      
+      // Set target emotion for AI mode
+      if (state.aiAssistedMode && state.emotionClient) {
+        const emotions = ['neutral', 'happy', 'sad', 'angry'];
+        state.emotionClient.setTargetEmotion(emotions[state.currentPhotoCount]);
+      }
+      
+      // Show manual capture button after 2 failed attempts (simulating AI struggles)
+      state.failedCaptureAttempts++;
+      if (state.failedCaptureAttempts >= 2) {
+        document.getElementById('manual-capture-btn').style.display = 'inline-block';
+      }
     } else {
       // All photos captured, upload and move to voice recording
       await uploadPhotos();
@@ -186,10 +355,38 @@ async function capturePhoto() {
   }, 'image/jpeg', 0.95);
 }
 
+async function manualCapturePhoto() {
+  // Show countdown
+  const button = document.getElementById('manual-capture-btn');
+  const originalText = button.textContent;
+  
+  for (let i = 3; i > 0; i--) {
+    button.textContent = `Capturing in ${i}...`;
+    button.disabled = true;
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }
+  
+  button.textContent = 'Capturing...';
+  
+  // Capture the photo
+  await capturePhoto();
+  
+  // Reset button
+  button.textContent = originalText;
+  button.disabled = false;
+  button.style.display = 'none';
+}
+
 function stopCamera() {
   if (state.cameraStream) {
     state.cameraStream.getTracks().forEach(track => track.stop());
     state.cameraStream = null;
+  }
+  
+  // Disconnect emotion client
+  if (state.emotionClient) {
+    state.emotionClient.disconnect();
+    state.emotionClient = null;
   }
 }
 
@@ -340,13 +537,51 @@ async function uploadVoiceAnswers(audioChunks) {
 }
 
 
-// Stage 3: Processing - Poll until Ego is ready
+// Stage 3: Processing - Poll until Ego is ready and avatars are generated
 async function pollForCompletion() {
   return new Promise((resolve) => {
+    let egoReady = false;
+    let avatarsReady = false;
+    
     const interval = setInterval(async () => {
       try {
-        const status = await api.getSessionStatus(state.sessionId);
-        if (status.isEgoReady) {
+        // Check ego status
+        const egoStatus = await api.getSessionStatus(state.sessionId);
+        if (egoStatus.isEgoReady && !egoReady) {
+          egoReady = true;
+          console.log('Ego is ready');
+        }
+        
+        // Check avatar status
+        const avatarStatus = await api.getAvatarStatus(state.sessionId);
+        console.log('Avatar status received:', avatarStatus);
+        if (avatarStatus.status === 'complete' && !avatarsReady) {
+          avatarsReady = true;
+          // Convert relative URLs to full URLs
+          state.avatarGifs = {};
+          console.log('Processing GIF paths:', avatarStatus.gifPaths);
+          for (const [emotion, url] of Object.entries(avatarStatus.gifPaths)) {
+            state.avatarGifs[emotion] = url.startsWith('http') ? url : `http://localhost:3001${url}`;
+          }
+          console.log('Avatars are ready:', state.avatarGifs);
+          // Set initial avatar display
+          setInitialAvatar();
+        } else if (avatarStatus.status === 'failed') {
+          console.warn('Avatar generation failed:', avatarStatus.error);
+          avatarsReady = true; // Continue without avatars
+        }
+        
+        // Update loading message based on what's still processing
+        if (!egoReady && !avatarsReady) {
+          updateLoadingMessage('Processing...');
+        } else if (egoReady && !avatarsReady) {
+          updateLoadingMessage('Generating your avatar...');
+        } else if (!egoReady && avatarsReady) {
+          updateLoadingMessage('Processing...');
+        }
+        
+        // Both are ready, we can proceed
+        if (egoReady && avatarsReady) {
           clearInterval(interval);
           resolve();
         }
@@ -396,6 +631,11 @@ function addMessageToChat(role, content, sources = null) {
   contentDiv.textContent = content;
   messageDiv.appendChild(contentDiv);
 
+  // Update avatar display for ego messages
+  if (role === 'ego') {
+    updateAvatarDisplay();
+  }
+
   // Add sources if available (RAG responses)
   if (sources && sources.length > 0) {
     const sourcesDiv = document.createElement('div');
@@ -413,6 +653,66 @@ function addMessageToChat(role, content, sources = null) {
 
   messagesContainer.appendChild(messageDiv);
   messagesContainer.scrollTop = messagesContainer.scrollHeight;
+}
+
+function updateAvatarDisplay() {
+  const avatarDisplay = document.getElementById('avatar-display');
+  if (!avatarDisplay) {
+    console.warn('Avatar display element not found');
+    return;
+  }
+  
+  // Pick a random emotion for now (later can be based on sentiment)
+  const emotions = Object.keys(state.avatarGifs);
+  console.log('updateAvatarDisplay - Available emotions:', emotions);
+  console.log('updateAvatarDisplay - Avatar GIFs state:', state.avatarGifs);
+  
+  if (emotions.length > 0) {
+    const randomEmotion = emotions[Math.floor(Math.random() * emotions.length)];
+    const gifUrl = state.avatarGifs[randomEmotion];
+    
+    console.log(`updateAvatarDisplay - Setting avatar to ${randomEmotion}:`, gifUrl);
+    
+    if (gifUrl) {
+      avatarDisplay.src = gifUrl;
+      avatarDisplay.alt = `${randomEmotion} avatar`;
+      console.log('updateAvatarDisplay - Avatar src set successfully');
+    } else {
+      console.warn(`updateAvatarDisplay - No URL found for emotion: ${randomEmotion}`);
+    }
+  } else {
+    console.warn('updateAvatarDisplay - No avatar emotions available');
+  }
+}
+
+function setInitialAvatar() {
+  const avatarDisplay = document.getElementById('avatar-display');
+  if (!avatarDisplay) {
+    console.warn('Avatar display element not found in setInitialAvatar');
+    return;
+  }
+  
+  // Set neutral avatar if available, otherwise first available emotion
+  const emotions = Object.keys(state.avatarGifs);
+  console.log('setInitialAvatar - Available emotions:', emotions);
+  console.log('setInitialAvatar - Avatar GIFs state:', state.avatarGifs);
+  
+  if (emotions.length > 0) {
+    const preferredEmotion = emotions.includes('neutral') ? 'neutral' : emotions[0];
+    const gifUrl = state.avatarGifs[preferredEmotion];
+    
+    console.log(`setInitialAvatar - Setting initial avatar to ${preferredEmotion}:`, gifUrl);
+    
+    if (gifUrl) {
+      avatarDisplay.src = gifUrl;
+      avatarDisplay.alt = `${preferredEmotion} avatar`;
+      console.log('setInitialAvatar - Avatar src set successfully');
+    } else {
+      console.warn(`setInitialAvatar - No URL found for preferred emotion: ${preferredEmotion}`);
+    }
+  } else {
+    console.warn('setInitialAvatar - No avatar emotions available for initial display');
+  }
 }
 
 function playAudio(audioUrl) {

@@ -12,13 +12,28 @@ import signal
 import time
 
 # Add the backend directory to Python path
-sys.path.append(os.path.join(os.path.dirname(__file__), 'backend'))
+backend_dir = os.path.join(os.path.dirname(__file__), 'backend')
+avatar_gen_dir = os.path.join(backend_dir, 'avatar_generation')
+sys.path.append(backend_dir)
+sys.path.append(avatar_gen_dir)
 
-from backend.emotion_recognizer import EmotionRecognizer
+from avatar_generation.emotion_recognizer import EmotionRecognizer
 
 def signal_handler(sig, frame):
     """Handle Ctrl+C gracefully."""
     print('\nShutting down emotion recognition service...')
+    # Kill any processes on port 8765
+    try:
+        import subprocess
+        result = subprocess.run(['lsof', '-ti:8765'], capture_output=True, text=True)
+        if result.stdout.strip():
+            pids = result.stdout.strip().split('\n')
+            for pid in pids:
+                if pid:
+                    subprocess.run(['kill', '-9', pid])
+                    print(f"Killed process {pid} on port 8765")
+    except Exception as e:
+        print(f"Error cleaning up port: {e}")
     sys.exit(0)
 
 def check_dependencies():
