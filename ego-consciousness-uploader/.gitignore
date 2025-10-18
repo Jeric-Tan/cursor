@@ -6,4 +6,7 @@ dist/
 build/
 .vercel/
 data/
-.smithery
+*.png
+*.jpg
+*.gif
+temp/
