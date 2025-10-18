@@ -31,16 +31,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function setupEventListeners() {
   console.log('Setting up event listeners...');
-  
-  // TODO: Add event listeners for all buttons
+
+  // Name input stage
   const startBtn = document.getElementById('start-btn');
+  const nameInput = document.getElementById('name-input');
+
+  // Voice recording stage
   const recordBtn = document.getElementById('record-btn');
   const stopBtn = document.getElementById('stop-btn');
+
+  // Emotion recognition stage
+  const startCameraBtn = document.getElementById('start-camera-btn');
+  const stopCameraBtn = document.getElementById('stop-camera-btn');
+  const continueToChatBtn = document.getElementById('continue-to-chat-btn');
+
+  // Chat stage
   const sendBtn = document.getElementById('send-btn');
-  const nameInput = document.getElementById('name-input');
-  
-  console.log('Found buttons:', { startBtn, recordBtn, stopBtn, sendBtn });
-  
+  const chatInput = document.getElementById('chat-input');
+
+  console.log('Found buttons:', {
+    startBtn, recordBtn, stopBtn, sendBtn,
+    startCameraBtn, stopCameraBtn, continueToChatBtn
+  });
+
   if (startBtn) {
     startBtn.addEventListener('click', handleNameSubmit);
     console.log('Start button listener added');
@@ -54,20 +67,45 @@ function setupEventListeners() {
     });
     console.log('Name input Enter-to-start enabled');
   }
-  
+
   if (recordBtn) {
     recordBtn.addEventListener('click', startRecording);
     console.log('Record button listener added');
   }
-  
+
   if (stopBtn) {
     stopBtn.addEventListener('click', stopRecording);
     console.log('Stop button listener added');
   }
-  
+
+  if (startCameraBtn) {
+    startCameraBtn.addEventListener('click', startEmotionDetection);
+    console.log('Start camera button listener added');
+  }
+
+  if (stopCameraBtn) {
+    stopCameraBtn.addEventListener('click', stopEmotionDetection);
+    console.log('Stop camera button listener added');
+  }
+
+  if (continueToChatBtn) {
+    continueToChatBtn.addEventListener('click', continueToChat);
+    console.log('Continue to chat button listener added');
+  }
+
   if (sendBtn) {
     sendBtn.addEventListener('click', sendMessage);
     console.log('Send button listener added');
+  }
+
+  if (chatInput) {
+    chatInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+    console.log('Chat input Enter-to-send enabled');
   }
 }
 
@@ -195,11 +233,11 @@ async function sendMessage() {
   input.value = '';
 
   try {
-    // TODO: Send to backend
-    const response = await api.sendMessage(state.sessionId, message);
+    // Send to backend with RAG enabled
+    const response = await api.sendMessage(state.sessionId, message, true);
 
     // Add Ego response to UI
-    addMessageToChat('ego', response.textResponse);
+    addMessageToChat('ego', response.textResponse, response.sources);
 
     // Play audio response
     if (response.audioUrl) {
@@ -211,11 +249,32 @@ async function sendMessage() {
   }
 }
 
-function addMessageToChat(role, content) {
+function addMessageToChat(role, content, sources = null) {
   const messagesContainer = document.getElementById('chat-messages');
   const messageDiv = document.createElement('div');
   messageDiv.className = `message ${role}`;
-  messageDiv.textContent = content;
+
+  // Add message content
+  const contentDiv = document.createElement('div');
+  contentDiv.className = 'message-content';
+  contentDiv.textContent = content;
+  messageDiv.appendChild(contentDiv);
+
+  // Add sources if available (RAG responses)
+  if (sources && sources.length > 0) {
+    const sourcesDiv = document.createElement('div');
+    sourcesDiv.className = 'message-sources';
+    sourcesDiv.innerHTML = '<details><summary>📚 Sources</summary><ul>' +
+      sources.slice(0, 3).map((source, i) =>
+        `<li>
+          <strong>${source.metadata.topic || 'Context'}</strong> (${Math.round(source.score * 100)}% match)<br>
+          <small>${source.metadata.url || ''}</small>
+        </li>`
+      ).join('') +
+      '</ul></details>';
+    messageDiv.appendChild(sourcesDiv);
+  }
+
   messagesContainer.appendChild(messageDiv);
   messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
