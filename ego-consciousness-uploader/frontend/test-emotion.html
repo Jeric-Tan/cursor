@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Emotion Recognition Test</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <div id="app">
+        <!-- Emotion Recognition Test Stage -->
+        <div id="emotion-recognition-stage" class="stage active">
+            <h2>🎭 Emotion Recognition Test</h2>
+            <p>Test the real-time emotion detection system</p>
+            
+            <div id="camera-container">
+                <video id="camera-feed" autoplay muted></video>
+                <canvas id="emotion-canvas" style="display: none;"></canvas>
+            </div>
+            
+            <div id="emotion-display">
+                <div id="current-emotion">No emotion detected</div>
+                <div id="emotion-confidence">Confidence: 0%</div>
+            </div>
+            
+            <div id="emotion-controls">
+                <button id="start-camera-btn">Start Camera</button>
+                <button id="stop-camera-btn" disabled>Stop Camera</button>
+                <button id="test-websocket-btn">Test WebSocket</button>
+            </div>
+            
+            <div id="status-display">
+                <div id="connection-status">WebSocket: Disconnected</div>
+                <div id="camera-status">Camera: Not Started</div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        // Test state
+        const state = {
+            cameraStream: null,
+            websocket: null,
+            isEmotionDetectionActive: false,
+            currentEmotion: null,
+            emotionConfidence: 0
+        };
+
+        // Initialize test
+        document.addEventListener('DOMContentLoaded', () => {
+            setupEventListeners();
+        });
+
+        function setupEventListeners() {
+            document.getElementById('start-camera-btn').addEventListener('click', startEmotionDetection);
+            document.getElementById('stop-camera-btn').addEventListener('click', stopEmotionDetection);
+            document.getElementById('test-websocket-btn').addEventListener('click', testWebSocket);
+        }
+
+        // Emotion Recognition Functions
+        async function startEmotionDetection() {
+            try {
+                console.log('🎥 Starting camera...');
+                updateStatus('camera-status', 'Camera: Starting...');
+                
+                // Request camera access
+                state.cameraStream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        width: 640, 
+                        height: 480,
+                        facingMode: 'user'
+                    } 
+                });
+                
+                // Set up video element
+                const video = document.getElementById('camera-feed');
+                video.srcObject = state.cameraStream;
+                
+                // Connect to WebSocket for emotion data
+                await connectToEmotionWebSocket();
+                
+                // Update UI
+                document.getElementById('start-camera-btn').disabled = true;
+                document.getElementById('stop-camera-btn').disabled = false;
+                
+                state.isEmotionDetectionActive = true;
+                updateStatus('camera-status', 'Camera: Active');
+                
+                console.log('✅ Camera started successfully');
+                
+            } catch (error) {
+                console.error('❌ Camera error:', error);
+                alert('Error accessing camera: ' + error.message);
+                updateStatus('camera-status', 'Camera: Error - ' + error.message);
+            }
+        }
+
+        async function connectToEmotionWebSocket() {
+            try {
+                console.log('🔗 Connecting to WebSocket...');
+                updateStatus('connection-status', 'WebSocket: Connecting...');
+                
+                // Connect to Python backend WebSocket
+                state.websocket = new WebSocket('ws://localhost:8765');
+                
+                state.websocket.onopen = () => {
+                    console.log('✅ Connected to emotion recognition service');
+                    updateStatus('connection-status', 'WebSocket: Connected');
+                };
+                
+                state.websocket.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        console.log('📨 Received emotion data:', data);
+                        
+                        if (data.type === 'emotion_frame') {
+                            updateEmotionDisplay(data);
+                        }
+                    } catch (error) {
+                        console.error('❌ Error parsing emotion data:', error);
+                    }
+                };
+                
+                state.websocket.onclose = () => {
+                    console.log('🔌 Disconnected from emotion recognition service');
+                    updateStatus('connection-status', 'WebSocket: Disconnected');
+                };
+                
+                state.websocket.onerror = (error) => {
+                    console.error('❌ WebSocket error:', error);
+                    updateStatus('connection-status', 'WebSocket: Error');
+                };
+                
+            } catch (error) {
+                console.error('❌ WebSocket connection error:', error);
+                updateStatus('connection-status', 'WebSocket: Connection Failed');
+            }
+        }
+
+        function updateEmotionDisplay(data) {
+            if (data.emotions && data.emotions.length > 0) {
+                const emotion = data.emotions[0];
+                const dominantEmotion = emotion.dominant_emotion;
+                const confidence = Math.round(emotion.emotion[dominantEmotion] * 100);
+                
+                // Update emotion display
+                document.getElementById('current-emotion').textContent = dominantEmotion;
+                document.getElementById('emotion-confidence').textContent = `Confidence: ${confidence}%`;
+                
+                // Update state
+                state.currentEmotion = dominantEmotion;
+                state.emotionConfidence = confidence;
+                
+                console.log(`😊 Detected emotion: ${dominantEmotion} (${confidence}%)`);
+                
+                // Update video with emotion annotations (if frame data is available)
+                if (data.frame) {
+                    displayAnnotatedFrame(data.frame);
+                }
+            } else {
+                document.getElementById('current-emotion').textContent = 'No emotion detected';
+                document.getElementById('emotion-confidence').textContent = 'Confidence: 0%';
+            }
+        }
+
+        function displayAnnotatedFrame(frameData) {
+            const video = document.getElementById('camera-feed');
+            const canvas = document.getElementById('emotion-canvas');
+            const ctx = canvas.getContext('2d');
+            
+            // Set canvas size to match video
+            canvas.width = video.videoWidth || 640;
+            canvas.height = video.videoHeight || 480;
+            
+            // Create image from base64 data
+            const img = new Image();
+            img.onload = () => {
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            };
+            img.src = `data:image/jpeg;base64,${frameData}`;
+        }
+
+        function stopEmotionDetection() {
+            console.log('🛑 Stopping emotion detection...');
+            
+            // Stop camera stream
+            if (state.cameraStream) {
+                state.cameraStream.getTracks().forEach(track => track.stop());
+                state.cameraStream = null;
+            }
+            
+            // Close WebSocket connection
+            if (state.websocket) {
+                state.websocket.close();
+                state.websocket = null;
+            }
+            
+            // Update UI
+            document.getElementById('start-camera-btn').disabled = false;
+            document.getElementById('stop-camera-btn').disabled = true;
+            
+            state.isEmotionDetectionActive = false;
+            updateStatus('camera-status', 'Camera: Stopped');
+            updateStatus('connection-status', 'WebSocket: Disconnected');
+            
+            // Clear video and canvas
+            const video = document.getElementById('camera-feed');
+            const canvas = document.getElementById('emotion-canvas');
+            video.srcObject = null;
+            canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+            
+            console.log('✅ Emotion detection stopped');
+        }
+
+        function testWebSocket() {
+            console.log('🧪 Testing WebSocket connection...');
+            if (state.websocket && state.websocket.readyState === WebSocket.OPEN) {
+                console.log('✅ WebSocket is connected');
+                updateStatus('connection-status', 'WebSocket: Connected & Working');
+            } else {
+                console.log('❌ WebSocket is not connected');
+                updateStatus('connection-status', 'WebSocket: Not Connected');
+            }
+        }
+
+        function updateStatus(elementId, message) {
+            const element = document.getElementById(elementId);
+            if (element) {
+                element.textContent = message;
+            }
+        }
+
+        // Log startup
+        console.log('🎭 Emotion Recognition Test Page Loaded');
+        console.log('📋 Instructions:');
+        console.log('1. Make sure Python backend is running: python start_emotion_recognition.py');
+        console.log('2. Click "Start Camera" to begin emotion detection');
+        console.log('3. Check browser console for detailed logs');
+    </script>
+</body>
+</html>

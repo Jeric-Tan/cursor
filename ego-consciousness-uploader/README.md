@@ -2,6 +2,8 @@
 
 Create a digital clone of yourself that talks, thinks, and sounds like you.
 
+**NEW: 🎭 Real-time Emotion Recognition** - Now with AI-powered facial emotion detection!
+
 ## Quick Start
 
 ### Option 1: Demo Mode (No API Keys Required!)
@@ -74,6 +76,58 @@ npm run dev
 ```
 
 Open `http://localhost:3001` in your browser.
+
+---
+
+## 🎭 Emotion Recognition (New Feature!)
+
+### Quick Test
+
+Test the emotion recognition system standalone:
+
+```bash
+# 1. Run the Python backend
+./test_emotion_only.sh
+
+# 2. Open the test page in your browser
+cd frontend
+python3 -m http.server 8081
+# Open: http://localhost:8081/test-emotion.html
+```
+
+### Full Integration
+
+The emotion recognition is integrated into the full app flow:
+
+```bash
+# Start both Node.js frontend and Python emotion backend
+./start_all.sh  # Mac/Linux
+# or
+start_all.bat   # Windows
+```
+
+The emotion recognition stage appears after voice recording, before chat.
+
+### Features
+- ✅ Real-time facial emotion detection using DeepFace AI
+- ✅ 7 emotions: angry, disgust, fear, happy, sad, surprise, neutral
+- ✅ Live camera feed with face detection bounding boxes
+- ✅ Dynamic confidence scores
+- ✅ WebSocket real-time streaming
+
+### Documentation
+- **Complete Guide**: See `REAL_EMOTION_DETECTION_GUIDE.md`
+- **Setup Verification**: Run `python3 verify_setup.py`
+- **Before/After Comparison**: See `BEFORE_VS_AFTER.md`
+
+### Requirements
+```bash
+# Install Python dependencies (in virtual environment)
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+---
 
 ## Team Responsibilities
 

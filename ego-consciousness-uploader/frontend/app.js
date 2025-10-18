@@ -10,7 +10,13 @@ const state = {
   userName: null,
   currentQuestionIndex: 0,
   recordedAudio: null,
-  messages: []
+  messages: [],
+  // Emotion recognition state
+  cameraStream: null,
+  websocket: null,
+  isEmotionDetectionActive: false,
+  currentEmotion: null,
+  emotionConfidence: 0
 };
 
 // MediaRecorder for voice recording
@@ -28,6 +34,11 @@ function setupEventListeners() {
   document.getElementById('record-btn').addEventListener('click', startRecording);
   document.getElementById('stop-btn').addEventListener('click', stopRecording);
   document.getElementById('send-btn').addEventListener('click', sendMessage);
+  
+  // Emotion recognition event listeners
+  document.getElementById('start-camera-btn').addEventListener('click', startEmotionDetection);
+  document.getElementById('stop-camera-btn').addEventListener('click', stopEmotionDetection);
+  document.getElementById('continue-to-chat-btn').addEventListener('click', continueToChat);
 }
 
 // Stage 1: Name Input
@@ -115,7 +126,7 @@ async function uploadVoice(audioBlob) {
     // TODO: Poll for completion
     await pollForCompletion();
 
-    switchStage(STAGES.CHAT);
+    switchStage(STAGES.EMOTION_RECOGNITION);
   } catch (error) {
     alert('Error uploading voice: ' + error.message);
   }
@@ -203,4 +214,144 @@ function updateLoadingMessage(message) {
   if (loadingMessage) {
     loadingMessage.textContent = message;
   }
+}
+
+// Emotion Recognition Functions
+async function startEmotionDetection() {
+  try {
+    // Request camera access
+    state.cameraStream = await navigator.mediaDevices.getUserMedia({ 
+      video: { 
+        width: 640, 
+        height: 480,
+        facingMode: 'user'
+      } 
+    });
+    
+    // Set up video element
+    const video = document.getElementById('camera-feed');
+    video.srcObject = state.cameraStream;
+    
+    // Connect to WebSocket for emotion data
+    await connectToEmotionWebSocket();
+    
+    // Update UI
+    document.getElementById('start-camera-btn').disabled = true;
+    document.getElementById('stop-camera-btn').disabled = false;
+    document.getElementById('continue-to-chat-btn').disabled = false;
+    
+    state.isEmotionDetectionActive = true;
+    
+  } catch (error) {
+    alert('Error accessing camera: ' + error.message);
+    console.error('Camera access error:', error);
+  }
+}
+
+async function connectToEmotionWebSocket() {
+  try {
+    // Connect to Python backend WebSocket
+    state.websocket = new WebSocket('ws://localhost:8765');
+    
+    state.websocket.onopen = () => {
+      console.log('Connected to emotion recognition service');
+    };
+    
+    state.websocket.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'emotion_frame') {
+          updateEmotionDisplay(data);
+        }
+      } catch (error) {
+        console.error('Error parsing emotion data:', error);
+      }
+    };
+    
+    state.websocket.onclose = () => {
+      console.log('Disconnected from emotion recognition service');
+    };
+    
+    state.websocket.onerror = (error) => {
+      console.error('WebSocket error:', error);
+    };
+    
+  } catch (error) {
+    console.error('Error connecting to emotion service:', error);
+  }
+}
+
+function updateEmotionDisplay(data) {
+  if (data.emotions && data.emotions.length > 0) {
+    const emotion = data.emotions[0];
+    const dominantEmotion = emotion.dominant_emotion;
+    const confidence = Math.round(emotion.emotion[dominantEmotion] * 100);
+    
+    // Update emotion display
+    document.getElementById('current-emotion').textContent = dominantEmotion;
+    document.getElementById('emotion-confidence').textContent = `Confidence: ${confidence}%`;
+    
+    // Update state
+    state.currentEmotion = dominantEmotion;
+    state.emotionConfidence = confidence;
+    
+    // Update video with emotion annotations (if frame data is available)
+    if (data.frame) {
+      displayAnnotatedFrame(data.frame);
+    }
+  } else {
+    document.getElementById('current-emotion').textContent = 'No emotion detected';
+    document.getElementById('emotion-confidence').textContent = 'Confidence: 0%';
+  }
+}
+
+function displayAnnotatedFrame(frameData) {
+  const video = document.getElementById('camera-feed');
+  const canvas = document.getElementById('emotion-canvas');
+  const ctx = canvas.getContext('2d');
+  
+  // Set canvas size to match video
+  canvas.width = video.videoWidth || 640;
+  canvas.height = video.videoHeight || 480;
+  
+  // Create image from base64 data
+  const img = new Image();
+  img.onload = () => {
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  };
+  img.src = `data:image/jpeg;base64,${frameData}`;
+}
+
+function stopEmotionDetection() {
+  // Stop camera stream
+  if (state.cameraStream) {
+    state.cameraStream.getTracks().forEach(track => track.stop());
+    state.cameraStream = null;
+  }
+  
+  // Close WebSocket connection
+  if (state.websocket) {
+    state.websocket.close();
+    state.websocket = null;
+  }
+  
+  // Update UI
+  document.getElementById('start-camera-btn').disabled = false;
+  document.getElementById('stop-camera-btn').disabled = true;
+  
+  state.isEmotionDetectionActive = false;
+  
+  // Clear video and canvas
+  const video = document.getElementById('camera-feed');
+  const canvas = document.getElementById('emotion-canvas');
+  video.srcObject = null;
+  canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+}
+
+function continueToChat() {
+  // Stop emotion detection
+  stopEmotionDetection();
+  
+  // Move to chat stage
+  switchStage(STAGES.CHAT);
 }
