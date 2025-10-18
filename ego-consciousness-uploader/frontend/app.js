@@ -627,7 +627,7 @@ async function uploadVoiceAnswers(audioChunks) {
 
     updateLoadingMessage('Cloning your voice...');
     updateLoadingMessage('Scraping the web for your digital footprint...');
-    updateLoadingMessage('Generating your Ego...');
+    updateLoadingMessage('Generating your Ego...\n(This might take a while)');
 
     await pollForCompletion();
 
@@ -758,6 +758,8 @@ function addMessageToChat(role, content, sources = null, audioUrl = null) {
   // Update avatar display for ego messages
   if (role === 'ego') {
     updateAvatarDisplay();
+  }
+  
   // Add play button for Ego responses with audio
   if (role === 'ego' && audioUrl) {
     const playButton = document.createElement('button');
@@ -794,7 +796,7 @@ function addMessageToChat(role, content, sources = null, audioUrl = null) {
   messagesContainer.appendChild(messageDiv);
   messagesContainer.scrollTop = messagesContainer.scrollHeight;
   }
-}
+
 
 function updateAvatarDisplay() {
   const avatarDisplay = document.getElementById('avatar-display');
