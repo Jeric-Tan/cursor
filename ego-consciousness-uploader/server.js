@@ -30,8 +30,23 @@ app.use(cors());
 app.use(express.json());
 app.use(fileUpload());
 
-// Serve frontend static files
-app.use(express.static(path.join(__dirname, 'frontend')));
+// Serve frontend static files with proper MIME types
+app.use(express.static(path.join(__dirname, 'frontend'), {
+  setHeaders: (res, path) => {
+    if (path.endsWith('.js')) {
+      res.setHeader('Content-Type', 'application/javascript');
+    }
+  }
+}));
+
+// Serve shared directory for module imports
+app.use('/shared', express.static(path.join(__dirname, 'shared'), {
+  setHeaders: (res, path) => {
+    if (path.endsWith('.js')) {
+      res.setHeader('Content-Type', 'application/javascript');
+    }
+  }
+}));
 
 // API Routes
 app.post('/api/start', handleStart);
@@ -40,8 +55,18 @@ app.get('/api/status', handleGetStatus);
 app.post('/api/chat', handleChat);
 app.post('/api/webhook', handleWebhook);
 
-// Serve index.html for all other routes (SPA)
-app.get('*', (req, res) => {
+// Serve index.html for all other routes (SPA) - but exclude API routes and static files
+app.get('*', (req, res, next) => {
+  // Skip if it's an API route
+  if (req.path.startsWith('/api/')) {
+    return next();
+  }
+  
+  // Skip if it's a static file (js, css, etc.)
+  if (req.path.match(/\.(js|css|png|jpg|jpeg|gif|ico|svg)$/)) {
+    return next();
+  }
+  
   res.sendFile(path.join(__dirname, 'frontend', 'index.html'));
 });
 
