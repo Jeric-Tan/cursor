@@ -19,21 +19,51 @@ let audioChunks = [];
 
 // Initialize app
 document.addEventListener('DOMContentLoaded', () => {
+  console.log('DOM loaded, setting up event listeners...');
   setupEventListeners();
 });
 
 function setupEventListeners() {
+  console.log('Setting up event listeners...');
+  
   // TODO: Add event listeners for all buttons
-  document.getElementById('start-btn').addEventListener('click', handleNameSubmit);
-  document.getElementById('record-btn').addEventListener('click', startRecording);
-  document.getElementById('stop-btn').addEventListener('click', stopRecording);
-  document.getElementById('send-btn').addEventListener('click', sendMessage);
+  const startBtn = document.getElementById('start-btn');
+  const recordBtn = document.getElementById('record-btn');
+  const stopBtn = document.getElementById('stop-btn');
+  const sendBtn = document.getElementById('send-btn');
+  
+  console.log('Found buttons:', { startBtn, recordBtn, stopBtn, sendBtn });
+  
+  if (startBtn) {
+    startBtn.addEventListener('click', handleNameSubmit);
+    console.log('Start button listener added');
+  } else {
+    console.error('Start button not found!');
+  }
+  
+  if (recordBtn) {
+    recordBtn.addEventListener('click', startRecording);
+    console.log('Record button listener added');
+  }
+  
+  if (stopBtn) {
+    stopBtn.addEventListener('click', stopRecording);
+    console.log('Stop button listener added');
+  }
+  
+  if (sendBtn) {
+    sendBtn.addEventListener('click', sendMessage);
+    console.log('Send button listener added');
+  }
 }
 
 // Stage 1: Name Input
 async function handleNameSubmit() {
+  console.log('handleNameSubmit called!');
   const nameInput = document.getElementById('name-input');
   const name = nameInput.value.trim();
+  
+  console.log('Name input value:', name);
 
   if (!name) {
     alert('Please enter your name');
