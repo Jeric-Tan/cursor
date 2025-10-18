@@ -188,6 +188,77 @@ pip install -r requirements.txt
 
 ---
 
+## 🎭 Avatar Generation & Video Creation (NEW!)
+
+### Avatar Generation Pipeline
+
+Generate digital avatars and emotional video variations using AI:
+
+```bash
+# Install Python dependencies
+pip install -r requirements.txt
+
+# Generate avatars and videos
+python backend/avatar_generator.py
+```
+
+**What it does:**
+- 🎨 Creates photorealistic base portraits from neutral face captures
+- 😊 Generates emotional variants (happy, sad, angry) using AI
+- 🎬 Creates animated videos from avatars using FAL.AI Veo 2
+- 📁 Saves all outputs to organized directories
+
+### Required API Keys
+
+Add these to your `.env` file:
+
+```bash
+# Google Gemini API for avatar generation
+GEMINI_API_KEY=your_gemini_api_key_here
+
+# FAL.AI API for video generation (Veo 2)
+FAL_KEY=your_fal_api_key_here
+```
+
+**Get your API keys:**
+- Gemini: https://makersuite.google.com/app/apikey
+- FAL.AI: https://fal.ai/
+
+### Features
+- ✅ High-quality avatar generation from face captures
+- ✅ Emotional expression variations
+- ✅ Video generation with FAL.AI Veo 2
+- ✅ Portrait format (9:16) optimized for mobile
+- ✅ 5-second video duration
+- ✅ Automatic file organization
+
+### Usage Examples
+
+```python
+from backend.avatar_generator import AvatarGenerator
+
+# Initialize with API keys
+generator = AvatarGenerator(
+    api_key="your_gemini_key",
+    fal_api_key="your_fal_key"
+)
+
+# Generate base portrait
+base_portrait = generator.generate_base_portrait("capture_neutral.png")
+
+# Generate emotional variants
+happy_avatar = generator.generate_expression_variant(
+    base_portrait, "capture_happy.png", "happy"
+)
+
+# Generate video
+video_path = generator.generate_video_from_avatar(
+    happy_avatar, "happy", "generated_videos"
+)
+```
+
+---
+
 ## Team Responsibilities
 
 ### Jake & ZhengFeng - Frontend & Supabase
@@ -213,6 +284,7 @@ pip install -r requirements.txt
 - `backend/elevenlabs.js` - Voice cloning & TTS
 - `backend/llm.js` - AI response generation
 - `backend/prompt-generator.js` - Personality prompt creation
+- `backend/avatar_generator.py` - Avatar generation & video creation with FAL.AI
 
 **Tasks:**
 1. Implement ElevenLabs voice cloning API
@@ -220,6 +292,7 @@ pip install -r requirements.txt
 3. Implement OpenAI/Anthropic LLM integration
 4. Build personality prompt from scraped data
 5. Test voice quality and response accuracy
+6. **NEW**: Avatar generation and video creation using FAL.AI Veo 2
 
 ## How It Works
 

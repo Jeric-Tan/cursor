@@ -14,3 +14,10 @@ Pillow>=9.0.0
 
 # Optional: For better performance
 scikit-learn>=1.2.0
+
+# Avatar Generator dependencies
+requests>=2.28.0
+Pillow>=9.0.0
+python-dotenv>=1.0.0
+google-genai>=0.3.0
+
