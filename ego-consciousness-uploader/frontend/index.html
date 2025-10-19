@@ -1,15 +1,27 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Ego - Consciousness Uploader</title>
-    <link rel="stylesheet" href="styles.css">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
-    <link rel="preload" href="fonts/cy-grotesk-key-2.ttf" as="font" type="font/ttf" crossorigin>
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Figtree:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="preload"
+      href="fonts/cy-grotesk-key-2.ttf"
+      as="font"
+      type="font/ttf"
+      crossorigin
+    />
   </head>
   <body>
     <h1>Ego</h1>
@@ -17,86 +29,90 @@
     <div id="app">
       <!-- JAKE/ZHENGFENG: Add your UI here -->
 
-        <!-- Stage 1: Name Input -->
-        <div id="name-input-stage" class="stage active">
-            <input type="text" id="name-input" placeholder="Your full name." />
+      <!-- Stage 1: Name Input -->
+      <div id="name-input-stage" class="stage active">
+        <input type="text" id="name-input" placeholder="Your full name." />
+      </div>
+      <p class="subtext">upload yourself.</p>
+
+      <!-- Stage 2: Camera Capture + Voice Recording -->
+      <div id="camera-capture-stage" class="stage hidden">
+        <h2 id="capture-title">Step 1: Take 4 Pictures</h2>
+        <div id="camera-container">
+          <video id="camera-feed" autoplay muted></video>
+          <canvas id="camera-canvas" style="display: none"></canvas>
         </div>
-        <p class="subtext">upload yourself.</p>
-
-
-        <!-- Stage 2: Camera Capture + Voice Recording -->
-        <div id="camera-capture-stage" class="stage hidden">
-            <h2 id="capture-title">Step 1: Take 4 Pictures</h2>
-            <div id="camera-container">
-                <video id="camera-feed" autoplay muted></video>
-                <canvas id="camera-canvas" style="display: none;"></canvas>
-            </div>
-            <div id="camera-instructions">
-                <p id="photo-instruction">Picture 1 of 4: Look at the camera with a neutral expression</p>
-                <div id="captured-photos">
-                    <div class="photo-slot" id="photo-slot-1">1</div>
-                    <div class="photo-slot" id="photo-slot-2">2</div>
-                    <div class="photo-slot" id="photo-slot-3">3</div>
-                    <div class="photo-slot" id="photo-slot-4">4</div>
-                </div>
-            </div>
-            <div id="camera-controls">
-                <div id="ai-mode-toggle">
-                    <label>
-                        <input type="checkbox" id="ai-assisted-mode" checked>
-                        AI-assisted capture
-                    </label>
-                    <span id="emotion-status" style="margin-left: 1rem; font-size: 0.8rem; color: #9ca3af;">Disconnected</span>
-                </div>
-                <button id="capture-photo-btn">Capture Photo</button>
-                <button id="manual-capture-btn" style="display: none;">Having trouble? Capture manually</button>
-            </div>
-
-            <!-- Voice Recording Section (shown after photos) -->
-            <div id="voice-section" style="display: none;">
-                <h2>Step 2: Answer the Questions</h2>
-                <div id="question-display"></div>
-                <button id="record-btn">Start Recording</button>
-                <button id="stop-btn" disabled>Stop Recording</button>
-                <div id="timer">0:00</div>
-                <div id="recording-status"></div>
-            </div>
+        <div id="camera-instructions">
+          <p id="photo-instruction">
+            Picture 1 of 4: Look at the camera with a neutral expression
+          </p>
+          <div id="captured-photos">
+            <div class="photo-slot" id="photo-slot-1">1</div>
+            <div class="photo-slot" id="photo-slot-2">2</div>
+            <div class="photo-slot" id="photo-slot-3">3</div>
+            <div class="photo-slot" id="photo-slot-4">4</div>
+          </div>
+        </div>
+        <div id="camera-controls">
+          <div id="ai-mode-toggle">
+            <label>
+              <input type="checkbox" id="ai-assisted-mode" checked />
+              AI-assisted capture
+            </label>
+            <span
+              id="emotion-status"
+              style="margin-left: 1rem; font-size: 0.8rem; color: #9ca3af"
+              >Disconnected</span
+            >
+          </div>
+          <button id="capture-photo-btn">Capture Photo</button>
+          <button id="manual-capture-btn" style="display: none">
+            Having trouble? Capture manually
+          </button>
         </div>
 
-        <!-- Stage 3: Processing -->
-        <div id="processing-stage" class="stage hidden">
-            <h2>Creating Your Ego...</h2>
-            <div id="loading-message">Processing...</div>
-            <div class="spinner"></div>
+        <!-- Voice Recording Section (shown after photos) -->
+        <div id="voice-section" style="display: none">
+          <h2>Step 2: Answer the Questions</h2>
+          <div id="question-display"></div>
+          <button id="record-btn">Start Recording</button>
+          <button id="stop-btn" disabled>Stop Recording</button>
+          <div id="timer">0:00</div>
+          <div id="recording-status"></div>
         </div>
+      </div>
 
-        <!-- Stage 4: Chat -->
-        <div id="chat-stage" class="stage hidden">
-            <h2>Chat with Your Ego</h2>
-            <div id="chat-container">
-                <div id="avatar-column">
-                    <img id="avatar-display" src="" alt="Your Ego" />
-                </div>
-                <div id="chat-column">
-                    <div id="chat-messages"></div>
-                    <div id="chat-input-container">
-                        <button id="voice-question-btn" class="voice-btn">🎤</button>
-                        <input type="text" id="chat-input" placeholder="Type or speak your question..." />
-                        <button id="send-btn">Send</button>
-                    </div>
-                </div>
+      <!-- Stage 3: Processing -->
+      <div id="processing-stage" class="stage hidden">
+        <h2>Creating Your Ego...</h2>
+        <div id="loading-message">Processing...</div>
+        <div class="spinner"></div>
+      </div>
+
+      <!-- Stage 4: Chat -->
+      <div id="chat-stage" class="stage hidden">
+        <h2>Chat with Your Ego</h2>
+        <div id="chat-container">
+          <div id="avatar-column">
+            <img id="avatar-display" src="" alt="Your Ego" />
+          </div>
+          <div id="chat-column">
+            <div id="chat-messages"></div>
+            <div id="chat-input-container">
+              <button id="voice-question-btn" class="voice-btn">🎤</button>
+              <input
+                type="text"
+                id="chat-input"
+                placeholder="Type or speak your question..."
+              />
+              <button id="send-btn">Send</button>
             </div>
-            <div id="voice-recording-status"></div>
-            <audio id="audio-player" controls style="display: none;"></audio>
-            <div style="margin-top: 20px; text-align: center;">
-                <a href="chat.html" style="color: #666; text-decoration: none; font-size: 0.9rem;">
-                    → Open dedicated chat page
-                </a>
-            </div>
+          </div>
         </div>
+      </div>
     </div>
 
     <script src="emotion-capture.js"></script>
     <script type="module" src="app.js"></script>
-</body>
+  </body>
 </html>
